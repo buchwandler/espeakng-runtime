@@ -204,7 +204,7 @@ def iter_library_candidates(
 
     found_executable = executable or maybe_find_executable()
     values.extend(
-        LibraryCandidate(str(path), "near-executable")
+        LibraryCandidate(path.as_posix(), "near-executable")
         for path in _near_executable_candidates(found_executable)
     )
 
