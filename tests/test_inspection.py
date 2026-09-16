@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from espeakng_runtime import discovery, inspect_espeak
+from espeakng_runtime.types import RuntimeInfo
 
 
 class FakeLibrary:
@@ -97,3 +98,18 @@ def test_probe_records_missing_mandatory_symbols(
     assert probe.loadable
     assert probe.missing_symbols == ("espeak_Terminate",)
     assert probe.error == "missing mandatory symbols: espeak_Terminate"
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ("1.52.0", (1, 52, 0)),
+        ("1.51.1-dev", (1, 51, 1)),
+        ("1.48.15  16.Apr.15", (1, 48, 15)),
+        (None, ()),
+        ("garbage", ()),
+    ],
+)
+def test_runtime_info_version_tuple(version: str | None, expected: tuple[int, ...]) -> None:
+    info = RuntimeInfo(requested_mode="cli", implementation="cli", version=version)
+    assert info.version_tuple == expected

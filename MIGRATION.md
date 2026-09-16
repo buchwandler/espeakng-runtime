@@ -23,6 +23,10 @@ raw = self._espeak.phonemize(
 # existing kokorog2p from_espeak/raw-vocabulary handling follows here
 ```
 
+`voice=` accepts language-style requests as well as concrete identifiers. The runtime resolves these requests against the active inventory, so a request such as `en-gb` can select the installed native identifier `en`. Normal requests do not select MBROLA implicitly. Call `resolve_voice(request, allow_mbrola=True)` or use an explicit `mb/...` or `mb-...` request when MBROLA is intended. `RuntimeInfo.version_tuple` provides normalized numeric version components.
+
+The runtime owns backend cleanup. Prefer the context manager or call `close()` explicitly; an unclosed runtime is also protected by garbage-collection finalization.
+
 ## PiperG2P
 
 Keep Piper's clause composition and phone-id mapping outside this package:

@@ -12,6 +12,7 @@ from espeakng_runtime.discovery import (
     probe_library,
     select_native,
 )
+from espeakng_runtime.errors import VoiceNotFoundError
 
 
 def _backends_available() -> bool:
@@ -27,6 +28,22 @@ def test_native_and_cli_share_basic_phonemization() -> None:
             native_value = native_runtime.phonemize(text, voice="en-us")
             cli_value = cli_runtime.phonemize(text, voice="en-us")
             assert native_value == cli_value
+
+
+@pytest.mark.espeak
+def test_language_style_voice_resolution_parity() -> None:
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
+        for requested_voice in ("en-us", "en-gb", "de", "fr"):
+            try:
+                native_runtime.resolve_voice(requested_voice)
+                cli_runtime.resolve_voice(requested_voice)
+            except VoiceNotFoundError:
+                continue
+            assert native_runtime.phonemize(
+                "Hello", voice=requested_voice, separator="_"
+            ) == cli_runtime.phonemize("Hello", voice=requested_voice, separator="_")
 
 
 def test_native_and_cli_share_options_and_batches() -> None:

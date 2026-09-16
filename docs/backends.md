@@ -16,6 +16,12 @@ Diagnostic source labels such as `espeakng-loader`, `near-executable`, `system-e
 
 The native backend uses `ctypes`. eSpeak's selected voice and other state are process-global, so native calls share a process-wide lock and native manager. Only the final runtime using a library calls `espeak_Terminate`. Conflicting active library or data paths are rejected.
 
+## Voice resolution
+
+`EspeakRuntime` resolves each `voice=` request against the active voice inventory and passes the selected concrete identifier to either backend. Matching prefers exact language, identifier, identifier basename, and then base language, in that order, while preserving inventory order for ties. Identifiers are compared case-insensitively with underscores and Windows separators normalized.
+
+Standard language requests exclude MBROLA entries. Explicit `mb/...` or `mb-...` requests can select MBROLA, and `resolve_voice(..., allow_mbrola=True)` enables it for a normal request when no preferred standard match exists. Voice inventory and resolved requests are cached per runtime instance. If a backend cannot enumerate voices, the requested identifier is passed through for backend-level validation.
+
 ## CLI backend
 
 The CLI backend starts eSpeak for each operation. An explicit data directory, the environment data directory, or data derived near the selected executable is used before any optional loader data. When `data` names `espeak-ng-data` or `espeak-data`, the CLI receives its parent directory through `--path`, matching native initialization. Otherwise the executable uses its own default data.

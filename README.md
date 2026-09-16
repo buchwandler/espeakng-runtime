@@ -70,6 +70,9 @@ with EspeakRuntime(mode="auto") as espeak:
 `mode` is `"auto"`, `"native"`, or `"cli"`. `auto` prefers a working native
 library and falls back to the command-line executable.
 
+Voice arguments are caller-facing requests, not necessarily native identifiers. The runtime enumerates the active inventory and resolves language requests such as `en-gb` to the concrete identifier accepted by the installed eSpeak version. Resolution is cached per runtime instance, and ordinary language requests never select MBROLA voices implicitly. Use an explicit `mb/...` or `mb-...` request, or `resolve_voice(..., allow_mbrola=True)`, when MBROLA selection is intended.
+
+`RuntimeInfo.version_tuple` exposes the numeric components of the reported eSpeak version, for example `(1, 48, 15)`. Runtime cleanup is deterministic with `close()` or a context manager, and abandoned runtimes release native ownership during garbage collection.
 For Piper-style exact clause handling, request an exact-capable runtime:
 
 ```python

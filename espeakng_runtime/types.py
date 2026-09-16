@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -49,3 +50,11 @@ class RuntimeInfo:
     parity: Literal["exact", "best-effort"] = "best-effort"
     fallback_reason: str | None = None
     fallback_code: FallbackCode | None = None
+
+    @property
+    def version_tuple(self) -> tuple[int, ...]:
+        """Return the numeric components of the reported version."""
+        if not self.version:
+            return ()
+        match = re.search(r"\d+(?:\.\d+)*", self.version)
+        return tuple(int(part) for part in match.group(0).split(".")) if match else ()

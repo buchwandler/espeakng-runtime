@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Sequence
 from typing import Literal
 
+from ._voices import choose_voice, normalize_voice_code
 from .backends.base import EspeakBackend
 from .backends.cli import CliBackend
 from .backends.native import NativeBackend
@@ -15,7 +17,7 @@ from .discovery import (
     maybe_find_executable,
     select_native,
 )
-from .errors import EspeakUnavailableError, PhonemizationError
+from .errors import CapabilityError, EspeakUnavailableError, PhonemizationError
 from .types import Clause, FallbackCode, RuntimeInfo, Voice
 
 Mode = Literal["auto", "native", "cli"]
@@ -53,6 +55,13 @@ def _selection_failure(
     return code, f"{reason}: {details}"
 
 
+def _safe_close_backend(backend: EspeakBackend) -> None:
+    try:
+        backend.close()
+    except Exception:
+        pass
+
+
 class EspeakRuntime:
     """Resolve and own one eSpeak backend.
 
@@ -75,6 +84,8 @@ class EspeakRuntime:
         self.mode = mode
         self._closed = False
         self._backend: EspeakBackend
+        self._voice_inventory: tuple[Voice, ...] | None = None
+        self._resolved_voices: dict[tuple[str, bool], Voice] = {}
 
         if mode == "cli":
             cli_executable = find_executable(executable)
@@ -84,6 +95,7 @@ class EspeakRuntime:
                 timeout=timeout,
                 requested_mode=mode,
             )
+            self._register_finalizer()
             return
 
         found_executable = maybe_find_executable(executable)
@@ -108,6 +120,7 @@ class EspeakRuntime:
                     raise
                 native_init_error = exc
             else:
+                self._register_finalizer()
                 return
 
         if native_init_error is None:
@@ -136,6 +149,10 @@ class EspeakRuntime:
             fallback_reason=reason,
             fallback_code=fallback_code,
         )
+        self._register_finalizer()
+
+    def _register_finalizer(self) -> None:
+        self._finalizer = weakref.finalize(self, _safe_close_backend, self._backend)
 
     def _ensure_open(self) -> None:
         if self._closed:
@@ -145,6 +162,31 @@ class EspeakRuntime:
     def info(self) -> RuntimeInfo:
         self._ensure_open()
         return self._backend.info
+
+    def resolve_voice(
+        self,
+        voice: str,
+        *,
+        allow_mbrola: bool = False,
+    ) -> Voice:
+        """Resolve a caller voice request to a concrete eSpeak voice."""
+        self._ensure_open()
+        requested = normalize_voice_code(voice)
+        if not requested:
+            return choose_voice((), requested, allow_mbrola=allow_mbrola)
+        key = (requested, allow_mbrola)
+        if key in self._resolved_voices:
+            return self._resolved_voices[key]
+
+        try:
+            if self._voice_inventory is None:
+                self._voice_inventory = tuple(self._backend.list_voices())
+        except CapabilityError:
+            resolved = Voice(name=voice, language="", identifier=requested)
+        else:
+            resolved = choose_voice(self._voice_inventory, requested, allow_mbrola=allow_mbrola)
+        self._resolved_voices[key] = resolved
+        return resolved
 
     def phonemize(
         self,
@@ -156,9 +198,10 @@ class EspeakRuntime:
         tie_char: str = "͡",
     ) -> str:
         self._ensure_open()
+        resolved = self.resolve_voice(voice)
         return self._backend.phonemize(
             text,
-            voice=voice,
+            voice=resolved.identifier,
             separator=separator,
             use_tie=use_tie,
             tie_char=tie_char,
@@ -174,9 +217,10 @@ class EspeakRuntime:
         tie_char: str = "͡",
     ) -> list[str]:
         self._ensure_open()
+        resolved = self.resolve_voice(voice)
         return self._backend.phonemize_many(
             texts,
-            voice=voice,
+            voice=resolved.identifier,
             separator=separator,
             use_tie=use_tie,
             tie_char=tie_char,
@@ -184,15 +228,21 @@ class EspeakRuntime:
 
     def clauses(self, text: str, *, voice: str, exact: bool = False) -> list[Clause]:
         self._ensure_open()
-        return self._backend.clauses(text, voice=voice, exact=exact)
+        resolved = self.resolve_voice(voice)
+        return self._backend.clauses(text, voice=resolved.identifier, exact=exact)
 
     def list_voices(self, filter_name: str | None = None) -> list[Voice]:
         self._ensure_open()
-        return self._backend.list_voices(filter_name)
+        if filter_name is not None:
+            return self._backend.list_voices(filter_name)
+        if self._voice_inventory is None:
+            self._voice_inventory = tuple(self._backend.list_voices())
+        return list(self._voice_inventory)
 
     def close(self) -> None:
         if not self._closed:
             self._closed = True
+            self._finalizer.detach()
             self._backend.close()
 
     def __enter__(self) -> EspeakRuntime:
