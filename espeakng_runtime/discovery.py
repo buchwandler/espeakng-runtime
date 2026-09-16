@@ -208,7 +208,7 @@ def data_parent_for_espeak(data: str | None) -> str | None:
     if not data:
         return None
     path = Path(data)
-    return str(path.parent) if path.name in {"espeak-ng-data", "espeak-data"} else data
+    return path.parent.as_posix() if path.name in {"espeak-ng-data", "espeak-data"} else data
 
 
 def _identity(value: str) -> str:
