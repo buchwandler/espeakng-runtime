@@ -41,6 +41,44 @@ class LibraryProbe:
     exact_clause_api: bool
     error: str | None = None
 
+    missing_symbols: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EspeakInspection:
+    """Non-initializing eSpeak capability and candidate inspection."""
+
+    executable: str | None
+    cli_available: bool
+    require_exact_clauses: bool
+    selected_library: str | None
+    selected_source: str | None
+    selected_data: str | None
+    candidates: tuple[LibraryProbe, ...] = ()
+
+    @property
+    def native_available(self) -> bool:
+        return self.selected_library is not None
+
+    @property
+    def exact_native_available(self) -> bool:
+        return bool(
+            self.selected_library
+            and any(
+                probe.library == self.selected_library and probe.exact_clause_api
+                for probe in self.candidates
+            )
+        )
+
+
+_REQUIRED_NATIVE_SYMBOLS = (
+    "espeak_Initialize",
+    "espeak_SetVoiceByName",
+    "espeak_Terminate",
+    "espeak_TextToPhonemes",
+)
+_EXACT_CLAUSE_SYMBOL = "espeak_TextToPhonemesWithTerminator"
+
 
 def _loader_paths() -> tuple[str, str | None] | None:
     try:
@@ -165,6 +203,14 @@ def find_data(
     return _derived_data(executable, library)
 
 
+def data_parent_for_espeak(data: str | None) -> str | None:
+    """Return the directory eSpeak expects for a public data path."""
+    if not data:
+        return None
+    path = Path(data)
+    return str(path.parent) if path.name in {"espeak-ng-data", "espeak-data"} else data
+
+
 def _identity(value: str) -> str:
     path = Path(value)
     if path.is_absolute() or path.exists():
@@ -186,6 +232,7 @@ def iter_library_candidates(
         path = Path(configured).expanduser()
         value = str(path.resolve()) if path.is_file() else configured
         configured_data = data or os.environ.get(ENV_DATA)
+        candidate_data: str | None
         if configured_data:
             data_path = Path(configured_data).expanduser()
             if not data_path.is_dir():
@@ -246,13 +293,16 @@ def probe_library(candidate: LibraryCandidate) -> LibraryProbe:
             False,
             str(exc),
         )
+    missing_symbols = tuple(name for name in _REQUIRED_NATIVE_SYMBOLS if not hasattr(library, name))
+    error = f"missing mandatory symbols: {', '.join(missing_symbols)}" if missing_symbols else None
     return LibraryProbe(
         candidate.library,
         candidate.source,
         candidate.data,
         True,
-        hasattr(library, "espeak_TextToPhonemesWithTerminator"),
-        None,
+        hasattr(library, _EXACT_CLAUSE_SYMBOL),
+        error,
+        missing_symbols,
     )
 
 
@@ -267,9 +317,39 @@ def select_native(
     for candidate in iter_library_candidates(library, executable=executable, data=data):
         probe = probe_library(candidate)
         probes.append(probe)
-        if probe.loadable and (probe.exact_clause_api or not require_exact_clauses):
+        if (
+            probe.loadable
+            and not probe.missing_symbols
+            and (probe.exact_clause_api or not require_exact_clauses)
+        ):
             return candidate, tuple(probes)
     return None, tuple(probes)
+
+
+def inspect_espeak(
+    *,
+    executable: str | None = None,
+    library: str | None = None,
+    data: str | None = None,
+    require_exact_clauses: bool = False,
+) -> EspeakInspection:
+    """Inspect eSpeak candidates without initializing the native library."""
+    resolved_executable = maybe_find_executable(executable)
+    selected, probes = select_native(
+        library=library,
+        executable=resolved_executable,
+        data=data,
+        require_exact_clauses=require_exact_clauses,
+    )
+    return EspeakInspection(
+        executable=resolved_executable,
+        cli_available=resolved_executable is not None,
+        require_exact_clauses=require_exact_clauses,
+        selected_library=selected.library if selected else None,
+        selected_source=selected.source if selected else None,
+        selected_data=selected.data if selected else None,
+        candidates=probes,
+    )
 
 
 def discover(

@@ -55,6 +55,10 @@ def test_unloadable_loader_falls_back_to_near_executable(
 
     class LoadableLibrary:
         pass
+        espeak_Initialize = object()
+        espeak_SetVoiceByName = object()
+        espeak_Terminate = object()
+        espeak_TextToPhonemes = object()
 
     def fake_cdll(path: str):
         if path == loader:

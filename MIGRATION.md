@@ -42,8 +42,11 @@ clauses = self._espeak.clauses(text, voice=voice)
 # existing Piper NFD/terminator/vowel-cluster composition follows here
 ```
 
-`prefer_exact_clauses=True` asks auto mode to prefer a native library that exposes the exact clause API. If no such library is available, auto mode falls back to the CLI backend and reports the fallback in `RuntimeInfo`; it does not make CLI clauses exact. Use `clauses(..., exact=True)` when the caller must require exact native terminator metadata. That call raises `CapabilityError` when the selected backend cannot provide it.
+`prefer_exact_clauses=True` asks auto mode to prefer a native library that exposes the exact clause API. If no such library is available, auto mode falls back to the CLI backend and reports the fallback code and detail in `RuntimeInfo`; it does not make CLI clauses exact. A selected native library that fails to initialize is handled the same way in auto mode. Native mode remains strict. Use `clauses(..., exact=True)` when the caller must require exact native terminator metadata. That call raises `CapabilityError` when the selected backend cannot provide it.
 
+PiperG2P should use the runtime's exact `Clause` records and keep its own NFD composition, language-switch and ZWJ cleanup, punctuation policy, sentence grouping, vowel-cluster merging, raw block handling, lexicon overlays, and phoneme-ID mapping. If Piper requires its historical one-punctuation-at-a-time CLI fallback grouping, that splitter also remains in PiperG2P rather than becoming a runtime policy.
+
+Use `inspect_espeak()` for non-initializing capability diagnostics instead of importing discovery internals. The runtime's source labels are diagnostic strings, and its structured fallback codes avoid parsing `fallback_reason`.
 For strict reference checks:
 
 ```python

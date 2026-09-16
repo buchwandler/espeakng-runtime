@@ -7,8 +7,9 @@ import subprocess
 from collections.abc import Sequence
 
 from .._text import split_best_effort_clauses
+from ..discovery import data_parent_for_espeak
 from ..errors import CapabilityError, PhonemizationError
-from ..types import Clause, RuntimeInfo, Voice
+from ..types import Clause, FallbackCode, RuntimeInfo, Voice
 
 _VERSION_RE = re.compile(r"(?:eSpeak NG|eSpeak)[^0-9]*([0-9]+(?:\.[0-9]+)+)", re.I)
 
@@ -22,12 +23,14 @@ class CliBackend:
         timeout: float | None,
         requested_mode: str,
         fallback_reason: str | None = None,
+        fallback_code: FallbackCode | None = None,
     ) -> None:
         self.executable = executable
         self.data = data
         self.timeout = timeout
         self.requested_mode = requested_mode
         self.fallback_reason = fallback_reason
+        self.fallback_code = fallback_code
         self._version: str | None = None
 
     def _run(
@@ -38,7 +41,7 @@ class CliBackend:
     ) -> subprocess.CompletedProcess[str]:
         command = [self.executable, *args]
         if self.data:
-            command.append(f"--path={self.data}")
+            command.append(f"--path={data_parent_for_espeak(self.data)}")
         try:
             process = subprocess.run(
                 command,
@@ -79,6 +82,7 @@ class CliBackend:
             exact_clause_api=False,
             parity="best-effort",
             fallback_reason=self.fallback_reason,
+            fallback_code=self.fallback_code,
         )
 
     @staticmethod

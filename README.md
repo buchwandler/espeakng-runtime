@@ -84,6 +84,19 @@ library when possible and otherwise falls back to CLI best-effort clauses.
 Calling `clauses(..., exact=True)` on a non-exact backend raises
 `CapabilityError` rather than silently degrading.
 
+Inspect capabilities without initializing eSpeak:
+
+```python
+from espeakng_runtime import inspect_espeak
+
+inspection = inspect_espeak(require_exact_clauses=True)
+print(inspection.native_available, inspection.cli_available)
+for probe in inspection.candidates:
+    print(probe.library, probe.loadable, probe.missing_symbols)
+```
+
+Inspection is non-initializing and does not alter process-global native state. In auto mode, a native initialization failure falls back to the CLI and is reported by `RuntimeInfo.fallback_code` and `RuntimeInfo.fallback_reason`.
+
 ## Configuration
 
 Explicit constructor arguments take precedence over environment variables:

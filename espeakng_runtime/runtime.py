@@ -8,11 +8,49 @@ from typing import Literal
 from .backends.base import EspeakBackend
 from .backends.cli import CliBackend
 from .backends.native import NativeBackend
-from .discovery import find_data, find_executable, maybe_find_executable, select_native
+from .discovery import (
+    LibraryProbe,
+    find_data,
+    find_executable,
+    maybe_find_executable,
+    select_native,
+)
 from .errors import EspeakUnavailableError, PhonemizationError
-from .types import Clause, RuntimeInfo, Voice
+from .types import Clause, FallbackCode, RuntimeInfo, Voice
 
 Mode = Literal["auto", "native", "cli"]
+
+
+def _probe_detail(probe: object) -> str:
+    error = getattr(probe, "error", None)
+    if error:
+        return str(error)
+    return "missing exact clause API"
+
+
+def _selection_failure(
+    probes: tuple[LibraryProbe, ...],
+    *,
+    prefer_exact_clauses: bool,
+) -> tuple[FallbackCode, str]:
+    if not probes:
+        reason = "no suitable native eSpeak library found"
+        if prefer_exact_clauses:
+            reason += " with exact clause API"
+        return "native-unavailable", reason
+    details = "; ".join(f"{probe.library}: {_probe_detail(probe)}" for probe in probes)
+    if all(not probe.loadable for probe in probes):
+        code: FallbackCode = "native-load-error"
+    elif prefer_exact_clauses and all(
+        not probe.exact_clause_api or bool(probe.missing_symbols) for probe in probes
+    ):
+        code = "exact-clause-api-unavailable"
+    else:
+        code = "native-unavailable"
+    reason = "no suitable native eSpeak library found"
+    if prefer_exact_clauses:
+        reason += " with exact clause API"
+    return code, f"{reason}: {details}"
 
 
 class EspeakRuntime:
@@ -55,33 +93,48 @@ class EspeakRuntime:
             data=data,
             require_exact_clauses=prefer_exact_clauses,
         )
+        native_init_error: EspeakUnavailableError | None = None
         if candidate is not None:
-            self._backend = NativeBackend(
-                library=candidate.library,
-                data=candidate.data,
-                executable=found_executable,
-                source=candidate.source,
-                requested_mode=mode,
+            try:
+                self._backend = NativeBackend(
+                    library=candidate.library,
+                    data=candidate.data,
+                    executable=found_executable,
+                    source=candidate.source,
+                    requested_mode=mode,
+                )
+            except EspeakUnavailableError as exc:
+                if mode == "native":
+                    raise
+                native_init_error = exc
+            else:
+                return
+
+        if native_init_error is None:
+            fallback_code, reason = _selection_failure(
+                probes, prefer_exact_clauses=prefer_exact_clauses
             )
-            return
-
-        details = "; ".join(
-            f"{probe.library}: {probe.error or 'missing exact clause API'}" for probe in probes
-        )
+        else:
+            fallback_code = "native-init-failed"
+            reason = f"native eSpeak initialization failed: {native_init_error}"
         if mode == "native":
-            suffix = f" ({details})" if details else ""
-            raise EspeakUnavailableError(f"no suitable native eSpeak library found{suffix}")
-
-        reason = "no suitable native eSpeak library found"
-        if prefer_exact_clauses:
-            reason += " with exact clause API"
-        cli_executable = find_executable(executable)
+            raise EspeakUnavailableError(reason)
+        try:
+            cli_executable = find_executable(executable)
+            cli_data = find_data(data, executable=cli_executable)
+        except EspeakUnavailableError as cli_error:
+            if native_init_error is not None:
+                raise EspeakUnavailableError(
+                    f"{reason}; CLI fallback unavailable: {cli_error}"
+                ) from cli_error
+            raise
         self._backend = CliBackend(
             executable=cli_executable,
-            data=find_data(data, executable=cli_executable),
+            data=cli_data,
             timeout=timeout,
             requested_mode=mode,
             fallback_reason=reason,
+            fallback_code=fallback_code,
         )
 
     def _ensure_open(self) -> None:

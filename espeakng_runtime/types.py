@@ -5,6 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+FallbackCode = Literal[
+    "native-unavailable",
+    "native-load-error",
+    "exact-clause-api-unavailable",
+    "native-init-failed",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class Voice:
@@ -41,3 +48,4 @@ class RuntimeInfo:
     exact_clause_api: bool = False
     parity: Literal["exact", "best-effort"] = "best-effort"
     fallback_reason: str | None = None
+    fallback_code: FallbackCode | None = None

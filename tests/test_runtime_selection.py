@@ -28,6 +28,66 @@ def test_auto_prefers_native(monkeypatch) -> None:
     assert isinstance(instance._backend, DummyNative)
 
 
+def test_auto_falls_back_after_native_initialization_failure(monkeypatch) -> None:
+    monkeypatch.setattr(runtime, "maybe_find_executable", lambda value=None: "/x/espeak-ng")
+    monkeypatch.setattr(runtime, "find_executable", lambda value=None: "/x/espeak-ng")
+    monkeypatch.setattr(
+        runtime,
+        "select_native",
+        lambda **kwargs: (LibraryCandidate("/x/libespeak-ng.so", "test", "/x/data"), ()),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "NativeBackend",
+        lambda **kwargs: (_ for _ in ()).throw(runtime.EspeakUnavailableError("bad data path")),
+    )
+    monkeypatch.setattr(runtime, "CliBackend", DummyCli)
+
+    instance = runtime.EspeakRuntime()
+
+    assert isinstance(instance._backend, DummyCli)
+    assert instance._backend.kwargs["fallback_code"] == "native-init-failed"
+    assert "bad data path" in instance._backend.kwargs["fallback_reason"]
+
+
+def test_native_does_not_fall_back_after_initialization_failure(monkeypatch) -> None:
+    monkeypatch.setattr(runtime, "maybe_find_executable", lambda value=None: "/x/espeak-ng")
+    monkeypatch.setattr(
+        runtime,
+        "select_native",
+        lambda **kwargs: (LibraryCandidate("/x/libespeak-ng.so", "test", "/x/data"), ()),
+    )
+    error = runtime.EspeakUnavailableError("bad data path")
+    monkeypatch.setattr(runtime, "NativeBackend", lambda **kwargs: (_ for _ in ()).throw(error))
+
+    with pytest.raises(runtime.EspeakUnavailableError, match="bad data path"):
+        runtime.EspeakRuntime(mode="native")
+
+
+def test_cli_unavailable_after_native_initialization_failure_is_descriptive(monkeypatch) -> None:
+    monkeypatch.setattr(runtime, "maybe_find_executable", lambda value=None: "/x/espeak-ng")
+    monkeypatch.setattr(
+        runtime,
+        "select_native",
+        lambda **kwargs: (LibraryCandidate("/x/libespeak-ng.so", "test", "/x/data"), ()),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "NativeBackend",
+        lambda **kwargs: (_ for _ in ()).throw(runtime.EspeakUnavailableError("bad data path")),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "find_executable",
+        lambda value=None: (_ for _ in ()).throw(
+            runtime.EspeakUnavailableError("missing executable")
+        ),
+    )
+
+    with pytest.raises(runtime.EspeakUnavailableError, match="bad data path.*missing executable"):
+        runtime.EspeakRuntime()
+
+
 def test_auto_falls_back_to_cli(monkeypatch) -> None:
     monkeypatch.setattr(runtime, "maybe_find_executable", lambda value=None: "/x/espeak-ng")
     monkeypatch.setattr(runtime, "find_executable", lambda value=None: "/x/espeak-ng")

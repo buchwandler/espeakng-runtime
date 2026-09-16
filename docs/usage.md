@@ -22,6 +22,8 @@ with EspeakRuntime(mode="auto") as runtime:
 
 `list_voices()` returns available `Voice` records. `runtime.info` returns a `RuntimeInfo` record describing discovery, implementation, version, parity, and capabilities.
 
+Use `inspect_espeak(require_exact_clauses=True)` when a consumer needs to choose behavior before creating a runtime. Inspection probes libraries without calling `espeak_Initialize`; `LibraryProbe.missing_symbols` and `RuntimeInfo.fallback_code` are intended for diagnostics without parsing human-readable messages.
+
 ## Clauses
 
 All backends support best-effort clause splitting. Native eSpeak NG libraries that expose `espeak_TextToPhonemesWithTerminator` also support exact clause metadata:

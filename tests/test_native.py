@@ -157,6 +157,19 @@ def test_decode_unknown_preserves_sentence_bit() -> None:
     assert native._decode_terminator(0) == (None, False)
 
 
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ("/x/espeak-ng-data", b"/x"),
+        ("/x/espeak-data", b"/x"),
+        ("/x", b"/x"),
+        (None, None),
+    ],
+)
+def test_native_data_path_normalization(data: str | None, expected: bytes | None) -> None:
+    assert native._init_data_path(data) == expected
+
+
 def test_exact_clause_conversion_preserves_codes(monkeypatch: pytest.MonkeyPatch) -> None:
     backend = make_backend(monkeypatch, FakeNativeLibrary())
     clauses = backend.clauses("ignored", voice="en-us", exact=True)

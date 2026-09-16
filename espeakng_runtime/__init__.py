@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .discovery import EspeakInspection, LibraryCandidate, LibraryProbe, inspect_espeak
 from .errors import (
     CapabilityError,
     EspeakConflictError,
@@ -11,7 +12,7 @@ from .errors import (
     VoiceNotFoundError,
 )
 from .runtime import EspeakRuntime
-from .types import Clause, RuntimeInfo, Voice
+from .types import Clause, FallbackCode, RuntimeInfo, Voice
 
 try:
     from ._version import __version__
@@ -21,7 +22,12 @@ except ImportError:  # pragma: no cover - editable tree before build hook runs
 __all__ = [
     "CapabilityError",
     "Clause",
+    "FallbackCode",
     "EspeakConflictError",
+    "EspeakInspection",
+    "LibraryCandidate",
+    "LibraryProbe",
+    "inspect_espeak",
     "EspeakError",
     "EspeakRuntime",
     "EspeakUnavailableError",

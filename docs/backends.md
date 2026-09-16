@@ -2,9 +2,15 @@
 
 ## Automatic selection
 
-`EspeakRuntime(mode="auto")` probes native libraries first, then falls back to the CLI executable. A requested exact capability filters native candidates to libraries exposing `espeak_TextToPhonemesWithTerminator`; if none is available, auto mode uses CLI best-effort behavior and records the reason in `RuntimeInfo.fallback_reason`.
+`EspeakRuntime(mode="auto")` probes native libraries first, then falls back to the CLI executable. A requested exact capability filters native candidates to libraries exposing `espeak_TextToPhonemesWithTerminator`; if none is available, auto mode uses CLI best-effort behavior and records both `RuntimeInfo.fallback_code` and the detailed `RuntimeInfo.fallback_reason`. If a selected native library cannot initialize, auto mode uses the same fallback; `mode="native"` always raises instead.
 
 Explicit constructor arguments override environment configuration. The discovery variables are `ESPEAKNG_RUNTIME_EXECUTABLE`, `ESPEAKNG_RUNTIME_LIBRARY`, and `ESPEAKNG_RUNTIME_DATA`.
+
+## Inspection and diagnostics
+
+`inspect_espeak(...)` returns an immutable, non-initializing `EspeakInspection` record. It reports CLI availability independently, the selected native library/source/data, and the ordered `LibraryProbe` records. Probes distinguish unloadable libraries, missing mandatory native symbols, and missing exact-clause support. Explicit libraries are authoritative and are the only library probed.
+
+Diagnostic source labels such as `espeakng-loader`, `near-executable`, `system-espeak-ng`, `system-espeak`, `explicit`, and `cli` identify discovery paths. They are diagnostic strings, not an enum contract.
 
 ## Native backend
 
@@ -12,7 +18,7 @@ The native backend uses `ctypes`. eSpeak's selected voice and other state are pr
 
 ## CLI backend
 
-The CLI backend starts eSpeak for each operation. An explicit data directory, the environment data directory, or data derived near the selected executable is used before any optional loader data. Otherwise the executable uses its own default data.
+The CLI backend starts eSpeak for each operation. An explicit data directory, the environment data directory, or data derived near the selected executable is used before any optional loader data. When `data` names `espeak-ng-data` or `espeak-data`, the CLI receives its parent directory through `--path`, matching native initialization. Otherwise the executable uses its own default data.
 
 ## Clause behavior
 

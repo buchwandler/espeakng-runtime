@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .._text import split_best_effort_clauses
+from ..discovery import data_parent_for_espeak
 from ..errors import (
     CapabilityError,
     EspeakConflictError,
@@ -33,11 +34,6 @@ _TERMINATORS: dict[int, str] = {
     0x4001E: ":",  # CLAUSE_COLON
     0x4101E: ";",  # CLAUSE_SEMICOLON
 }
-
-
-def _decode_terminator(value: int) -> tuple[str | None, bool]:
-    punctuation = value & CLAUSE_PUNCTUATION_MASK
-    return _TERMINATORS.get(punctuation), bool(value & CLAUSE_TYPE_SENTENCE)
 
 
 def _decode_terminator(value: int) -> tuple[str | None, bool]:
@@ -85,13 +81,8 @@ def _path_identity(value: str | None) -> str | None:
 
 
 def _init_data_path(data: str | None) -> bytes | None:
-    if not data:
-        return None
-    path = Path(data)
-    # espeak_Initialize accepts a path whose child is espeak-ng-data. Loader
-    # packages generally return the espeak-ng-data directory itself.
-    value = path.parent if path.name in {"espeak-ng-data", "espeak-data"} else path
-    return str(value).encode("utf-8")
+    value = data_parent_for_espeak(data)
+    return value.encode("utf-8") if value else None
 
 
 class _NativeManager:
