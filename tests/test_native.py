@@ -36,6 +36,7 @@ class FakeNativeLibrary:
         self.voice_result = voice_result
         self.no_progress = no_progress
         self.terminate_calls = 0
+        self.initialize_calls = 0
         self.voices_calls = 0
         self.last_voice: bytes | None = None
         self._clause_index = 0
@@ -50,6 +51,7 @@ class FakeNativeLibrary:
             self.espeak_TextToPhonemesWithTerminator = FakeFunction(self._exact_clauses)
 
     def _initialize(self, *_args: object) -> int:
+        self.initialize_calls += 1
         return self.init_result
 
     def _set_voice(self, voice: bytes) -> int:
@@ -222,7 +224,7 @@ def test_list_voices(monkeypatch: pytest.MonkeyPatch) -> None:
     backend.close()
 
 
-def test_manager_reuses_library_and_terminates_final_user(
+def test_manager_reuses_library_without_terminating_final_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     library = FakeNativeLibrary()
@@ -232,8 +234,31 @@ def test_manager_reuses_library_and_terminates_final_user(
     assert native._MANAGER.users == 2
     first.close()
     assert library.terminate_calls == 0
+    assert native._MANAGER.users == 1
     second.close()
-    assert library.terminate_calls == 1
+    assert library.terminate_calls == 0
+    assert native._MANAGER.users == 0
+    assert native._MANAGER.library is library
+
+
+def test_manager_reuses_initialized_library_after_all_users_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    library = FakeNativeLibrary()
+    first = make_backend(monkeypatch, library)
+    first.close()
+
+    assert native._MANAGER.users == 0
+    assert library.initialize_calls == 1
+    assert library.terminate_calls == 0
+
+    second = make_backend(monkeypatch, library)
+
+    assert native._MANAGER.users == 1
+    assert library.initialize_calls == 1
+    assert library.terminate_calls == 0
+
+    second.close()
 
 
 def test_manager_rejects_conflicting_library_and_data(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -243,3 +268,6 @@ def test_manager_rejects_conflicting_library_and_data(monkeypatch: pytest.Monkey
     with pytest.raises(EspeakConflictError, match="data directory"):
         make_backend(monkeypatch, FakeNativeLibrary(), "/fake/one.so", "/fake/other-data")
     first.close()
+
+    with pytest.raises(EspeakConflictError, match="shared library"):
+        make_backend(monkeypatch, FakeNativeLibrary(), "/fake/two.so")

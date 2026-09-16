@@ -14,7 +14,7 @@ Diagnostic source labels such as `espeakng-loader`, `near-executable`, `system-e
 
 ## Native backend
 
-The native backend uses `ctypes`. eSpeak's selected voice and other state are process-global, so native calls share a process-wide lock and native manager. Only the final runtime using a library calls `espeak_Terminate`. Conflicting active library or data paths are rejected.
+The native backend uses `ctypes`. eSpeak's selected voice and other state are process-global, so native calls share a process-wide lock and native manager. Closing a runtime releases its Python ownership; the initialized native library remains resident for the process lifetime rather than being terminated and reinitialized repeatedly. Compatible runtimes reuse it, and conflicting library or data paths are rejected.
 
 ## Voice resolution
 

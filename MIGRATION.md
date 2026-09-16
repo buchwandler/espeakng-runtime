@@ -25,7 +25,7 @@ raw = self._espeak.phonemize(
 
 `voice=` accepts language-style requests as well as concrete identifiers. The runtime resolves these requests against the active inventory, so a request such as `en-gb` can select the installed native identifier `en`. Normal requests do not select MBROLA implicitly. Call `resolve_voice(request, allow_mbrola=True)` or use an explicit `mb/...` or `mb-...` request when MBROLA is intended. `RuntimeInfo.version_tuple` provides normalized numeric version components.
 
-The runtime owns backend cleanup. Prefer the context manager or call `close()` explicitly; an unclosed runtime is also protected by garbage-collection finalization.
+The runtime owns Python-side backend cleanup. Prefer the context manager or call `close()` explicitly; an unclosed runtime is also protected by garbage-collection finalization. Closing a runtime releases its Python ownership, but the initialized native eSpeak library remains resident for the process lifetime because native state is process-global and older releases may be unsafe to terminate/reinitialize repeatedly. Subsequent compatible runtimes reuse it, and conflicting native library or data paths in the same process are rejected.
 
 ## PiperG2P
 

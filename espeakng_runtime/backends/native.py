@@ -178,14 +178,14 @@ class _NativeManager:
     def release(self) -> None:
         with self.lock:
             self.users = max(0, self.users - 1)
-            if self.users == 0 and self.library is not None:
-                try:
-                    self.library.espeak_Terminate()
-                finally:
-                    self.library = None
-                    self.library_path = None
-                    self.data_path = None
-                    self.version = None
+            # eSpeak native state is process-global. Keep an initialized native
+            # library resident for the process lifetime instead of repeatedly
+            # calling espeak_Terminate()/espeak_Initialize().
+            #
+            # In particular, eSpeak NG 1.51 starts its async FIFO worker during
+            # general initialization even for clients that later select
+            # AUDIO_OUTPUT_SYNCHRONOUS. Terminating that process-global state can
+            # block in the native worker teardown on affected builds.
 
 
 _MANAGER = _NativeManager()
