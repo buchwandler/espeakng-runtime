@@ -1,3 +1,5 @@
+[![codecov](https://codecov.io/gh/buchwandler/espeakng-runtime/graph/badge.svg?token=spJ8cG3cEK)](https://codecov.io/gh/buchwandler/espeakng-runtime)
+
 # espeakng-runtime
 
 A small Python runtime adapter for **eSpeak NG** phonemization.

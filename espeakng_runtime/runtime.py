@@ -9,7 +9,7 @@ from .backends.base import EspeakBackend
 from .backends.cli import CliBackend
 from .backends.native import NativeBackend
 from .discovery import find_data, find_executable, maybe_find_executable, select_native
-from .errors import EspeakUnavailableError
+from .errors import EspeakUnavailableError, PhonemizationError
 from .types import Clause, RuntimeInfo, Voice
 
 Mode = Literal["auto", "native", "cli"]
@@ -84,8 +84,13 @@ class EspeakRuntime:
             fallback_reason=reason,
         )
 
+    def _ensure_open(self) -> None:
+        if self._closed:
+            raise PhonemizationError("eSpeak runtime is closed")
+
     @property
     def info(self) -> RuntimeInfo:
+        self._ensure_open()
         return self._backend.info
 
     def phonemize(
@@ -97,6 +102,7 @@ class EspeakRuntime:
         use_tie: bool = False,
         tie_char: str = "͡",
     ) -> str:
+        self._ensure_open()
         return self._backend.phonemize(
             text,
             voice=voice,
@@ -114,6 +120,7 @@ class EspeakRuntime:
         use_tie: bool = False,
         tie_char: str = "͡",
     ) -> list[str]:
+        self._ensure_open()
         return self._backend.phonemize_many(
             texts,
             voice=voice,
@@ -123,9 +130,11 @@ class EspeakRuntime:
         )
 
     def clauses(self, text: str, *, voice: str, exact: bool = False) -> list[Clause]:
+        self._ensure_open()
         return self._backend.clauses(text, voice=voice, exact=exact)
 
     def list_voices(self, filter_name: str | None = None) -> list[Voice]:
+        self._ensure_open()
         return self._backend.list_voices(filter_name)
 
     def close(self) -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from espeakng_runtime import runtime
 from espeakng_runtime.discovery import LibraryCandidate
 
@@ -34,3 +36,14 @@ def test_auto_falls_back_to_cli(monkeypatch) -> None:
     instance = runtime.EspeakRuntime(prefer_exact_clauses=True)
     assert isinstance(instance._backend, DummyCli)
     assert "exact clause API" in instance._backend.kwargs["fallback_reason"]
+
+
+def test_runtime_is_unusable_after_close(monkeypatch) -> None:
+    from espeakng_runtime.errors import PhonemizationError
+
+    monkeypatch.setattr(runtime, "find_executable", lambda value=None: "/x/espeak-ng")
+    monkeypatch.setattr(runtime, "find_data", lambda *args, **kwargs: None)
+    instance = runtime.EspeakRuntime(mode="cli")
+    instance.close()
+    with pytest.raises(PhonemizationError, match="closed"):
+        instance.phonemize("hello", voice="en-us")

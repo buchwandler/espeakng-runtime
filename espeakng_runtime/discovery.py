@@ -159,8 +159,9 @@ def find_data(
             f"configured eSpeak data directory does not exist: {configured}"
         )
     loader = _loader_paths()
-    if loader is not None and loader[1]:
-        return loader[1]
+    if loader is not None and loader[1] and library is not None:
+        if _identity(library) == _identity(loader[0]):
+            return loader[1]
     return _derived_data(executable, library)
 
 
@@ -201,16 +202,16 @@ def iter_library_candidates(
     if loader is not None:
         values.append(LibraryCandidate(loader[0], "espeakng-loader", loader[1]))
 
-    for name, source in (("espeak-ng", "system-espeak-ng"), ("espeak", "system-espeak")):
-        found = ctypes.util.find_library(name)
-        if found:
-            values.append(LibraryCandidate(found, source))
-
     found_executable = executable or maybe_find_executable()
     values.extend(
         LibraryCandidate(str(path), "near-executable")
         for path in _near_executable_candidates(found_executable)
     )
+
+    for name, source in (("espeak-ng", "system-espeak-ng"), ("espeak", "system-espeak")):
+        found = ctypes.util.find_library(name)
+        if found:
+            values.append(LibraryCandidate(found, source))
 
     result: list[LibraryCandidate] = []
     seen: set[str] = set()

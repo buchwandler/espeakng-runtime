@@ -6,3 +6,8 @@ def test_split_best_effort_clauses() -> None:
         ("Hello", ",", False),
         (" world", "!", True),
     ]
+
+
+def test_punctuation_clusters_are_single_clauses() -> None:
+    assert split_best_effort_clauses("Hello?!") == [("Hello", "?!", True)]
+    assert split_best_effort_clauses("Hello...") == [("Hello", "...", True)]

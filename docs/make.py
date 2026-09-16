@@ -24,17 +24,9 @@ def main():
     """Run the script."""
     sphinx_build = "sphinx-build"
 
-    # Determine if we're being run from docs/ or from project root
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    if os.path.basename(script_dir) == "docs":
-        # Running from docs directory
-        build_dir = "_build"
-        source_dir = "."
-    else:
-        # Running from project root
-        build_dir = os.path.join("docs", "_build")
-        source_dir = "docs"
-
+    source_dir = script_dir
+    build_dir = os.path.join(script_dir, "_build")
     target = "html" if len(sys.argv) < 2 else sys.argv[1]
 
     if target == "clean":
@@ -72,12 +64,12 @@ def main():
     if target == "all":
         # Build all formats
         for fmt in ["html", "dirhtml", "latex"]:
-            cmd = [sphinx_build, "-b", fmt, source_dir, os.path.join(build_dir, fmt)]
+            cmd = [sphinx_build, "-W", "-b", fmt, source_dir, os.path.join(build_dir, fmt)]
             print(f"Building {fmt} documentation...")
             subprocess.run(cmd, check=True)
     else:
         # Build specific format
-        cmd = [sphinx_build, "-b", target, source_dir, os.path.join(build_dir, target)]
+        cmd = [sphinx_build, "-W", "-b", target, source_dir, os.path.join(build_dir, target)]
         print(f"Building {target} documentation...")
         subprocess.run(cmd, check=True)
 

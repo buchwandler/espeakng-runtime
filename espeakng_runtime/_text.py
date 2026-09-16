@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-_CLAUSE_RE = re.compile(r"(.*?)([.!?]|[,;:]|$)", re.DOTALL)
+_CLAUSE_RE = re.compile(r"(.*?)([.!?]+|[,;:]+|$)", re.DOTALL)
 
 
 def split_best_effort_clauses(text: str) -> list[tuple[str, str | None, bool]]:
@@ -22,7 +22,7 @@ def split_best_effort_clauses(text: str) -> list[tuple[str, str | None, bool]]:
         if not body and not terminator:
             break
         token = terminator or None
-        result.append((body, token, token in {".", "!", "?"}))
+        result.append((body, token, bool(token and set(token) & {".", "!", "?"})))
         position = match.end()
         if position >= len(text):
             break

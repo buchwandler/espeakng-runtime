@@ -22,14 +22,27 @@ CHARS_UTF8 = 1
 PHONEMES_IPA = 0x02
 PHONEMES_TIE = 0x80
 
-_TERMINATORS: dict[int, tuple[str, bool]] = {
-    0x41000: (",", False),
-    0x42000: (":", False),
-    0x43000: (";", False),
-    0x48000: (".", True),
-    0x82000: ("?", True),
-    0x83000: ("!", True),
+CLAUSE_TYPE_SENTENCE = 0x00080000
+CLAUSE_PUNCTUATION_MASK = 0x000FFFFF
+
+_TERMINATORS: dict[int, str] = {
+    0x80028: ".",  # CLAUSE_PERIOD
+    0x82028: "?",  # CLAUSE_QUESTION
+    0x8302D: "!",  # CLAUSE_EXCLAMATION
+    0x41014: ",",  # CLAUSE_COMMA
+    0x4001E: ":",  # CLAUSE_COLON
+    0x4101E: ";",  # CLAUSE_SEMICOLON
 }
+
+
+def _decode_terminator(value: int) -> tuple[str | None, bool]:
+    punctuation = value & CLAUSE_PUNCTUATION_MASK
+    return _TERMINATORS.get(punctuation), bool(value & CLAUSE_TYPE_SENTENCE)
+
+
+def _decode_terminator(value: int) -> tuple[str | None, bool]:
+    punctuation = value & CLAUSE_PUNCTUATION_MASK
+    return _TERMINATORS.get(punctuation), bool(value & CLAUSE_TYPE_SENTENCE)
 
 
 class _VoiceStruct(ctypes.Structure):
@@ -330,7 +343,7 @@ class NativeBackend:
             )
             if pointer.value == previous:
                 raise PhonemizationError("espeak_TextToPhonemesWithTerminator made no progress")
-            token, sentence_end = _TERMINATORS.get(terminator.value & 0xFFF000, (None, False))
+            token, sentence_end = _decode_terminator(terminator.value)
             clauses.append(
                 Clause(
                     phonemes=_decode(value),
