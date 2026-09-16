@@ -1,3 +1,6 @@
+[![PyPI - Version](https://img.shields.io/pypi/v/espeakng-runtime)](https://pypi.org/project/espeakng-runtime/)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/espeakng-runtime)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/espeakng-runtime)
 [![codecov](https://codecov.io/gh/buchwandler/espeakng-runtime/graph/badge.svg?token=spJ8cG3cEK)](https://codecov.io/gh/buchwandler/espeakng-runtime)
 
 # espeakng-runtime
