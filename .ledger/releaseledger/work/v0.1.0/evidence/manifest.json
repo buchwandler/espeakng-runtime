@@ -1,0 +1,86 @@
+{
+  "candidate_count": 3,
+  "candidates": [
+    {
+      "additions": 1802,
+      "deletions": 3,
+      "patch_file": "4ed12c4.patch",
+      "patch_sha256": "456a87f61db854856e0519a48b6884da682661227dc992d5163372f4f59426c8",
+      "paths": [
+        ".codecrate.toml",
+        ".github/workflows/pre-commit.yml",
+        ".github/workflows/tests.yml",
+        ".gitignore",
+        ".ledger/ledger.toml",
+        ".ledger/releaseledger/.ledger-project.toml",
+        ".ledger/releaseledger/config.toml",
+        ".ledger/releaseledger/data/.ledger-project.toml",
+        ".ledger/taskledger/.ledger-project.toml",
+        ".ledger/taskledger/config.toml",
+        ".pre-commit-config.yaml",
+        "MIGRATION.md",
+        "README.md",
+        "espeakng_runtime/__init__.py",
+        "espeakng_runtime/_text.py",
+        "espeakng_runtime/backends/__init__.py",
+        "espeakng_runtime/backends/base.py",
+        "espeakng_runtime/backends/cli.py",
+        "espeakng_runtime/backends/native.py",
+        "espeakng_runtime/discovery.py",
+        "espeakng_runtime/errors.py",
+        "espeakng_runtime/py.typed",
+        "espeakng_runtime/runtime.py",
+        "espeakng_runtime/types.py",
+        "pyproject.toml",
+        "tests/test_discovery.py",
+        "tests/test_live_espeak.py",
+        "tests/test_packaging.py",
+        "tests/test_runtime_selection.py",
+        "tests/test_text.py"
+      ],
+      "sha": "4ed12c47d3c3e5e436cdda82a04b0af50091b949",
+      "short_sha": "4ed12c4",
+      "source_ref": "git:4ed12c47d3c3e5e436cdda82a04b0af50091b949"
+    },
+    {
+      "additions": 346,
+      "deletions": 2,
+      "patch_file": "b5d8200.patch",
+      "patch_sha256": "cd2497d5bf3c588e4eaa29014e7bb00828771216816217fc3872c284df2584fb",
+      "paths": [
+        ".ledger/releaseledger/config.toml",
+        "docs/Makefile",
+        "docs/conf.py",
+        "docs/make.bat",
+        "docs/make.py",
+        "docs/requirements.txt",
+        "pyproject.toml",
+        "tests/test_packaging.py"
+      ],
+      "sha": "b5d820081cd277fac89400efd40ac6163203652e",
+      "short_sha": "b5d8200",
+      "source_ref": "git:b5d820081cd277fac89400efd40ac6163203652e"
+    },
+    {
+      "additions": 91,
+      "deletions": 0,
+      "patch_file": "87c5014.patch",
+      "patch_sha256": "dc985c76cb6a43fa48ed71637e7610cfd5a02510abfa90a9a72348877b0c9d1b",
+      "paths": [
+        ".github/workflows/codecov.yml",
+        ".github/workflows/python-publish.yml"
+      ],
+      "sha": "87c501426a62cc2c59fd0dfb12b8d15b1343494b",
+      "short_sha": "87c5014",
+      "source_ref": "git:87c501426a62cc2c59fd0dfb12b8d15b1343494b"
+    }
+  ],
+  "git_base_ref": "fe88491144f87e7aed8eecc1bcbd87b8dfcd63ab",
+  "git_base_sha": "fe88491144f87e7aed8eecc1bcbd87b8dfcd63ab",
+  "git_head_ref": "87c501426a62cc2c59fd0dfb12b8d15b1343494b",
+  "git_head_sha": "87c501426a62cc2c59fd0dfb12b8d15b1343494b",
+  "include_merges": "nontrivial",
+  "object_type": "git_evidence_manifest",
+  "release_version": "v0.1.0",
+  "schema_version": 1
+}

@@ -1,0 +1,71 @@
+rows:
+  - sha: 4ed12c47d3c3e5e436cdda82a04b0af50091b949
+    inspected: true
+    inspected_paths:
+      - .codecrate.toml
+      - .github/workflows/pre-commit.yml
+      - .github/workflows/tests.yml
+      - .gitignore
+      - .ledger/ledger.toml
+      - .ledger/releaseledger/.ledger-project.toml
+      - .ledger/releaseledger/config.toml
+      - .ledger/releaseledger/data/.ledger-project.toml
+      - .ledger/taskledger/.ledger-project.toml
+      - .ledger/taskledger/config.toml
+      - .pre-commit-config.yaml
+      - MIGRATION.md
+      - README.md
+      - espeakng_runtime/__init__.py
+      - espeakng_runtime/_text.py
+      - espeakng_runtime/backends/__init__.py
+      - espeakng_runtime/backends/base.py
+      - espeakng_runtime/backends/cli.py
+      - espeakng_runtime/backends/native.py
+      - espeakng_runtime/discovery.py
+      - espeakng_runtime/errors.py
+      - espeakng_runtime/py.typed
+      - espeakng_runtime/runtime.py
+      - espeakng_runtime/types.py
+      - pyproject.toml
+      - tests/test_discovery.py
+      - tests/test_live_espeak.py
+      - tests/test_packaging.py
+      - tests/test_runtime_selection.py
+      - tests/test_text.py
+    observed_behavior: "Introduced the public EspeakRuntime facade, native ctypes and CLI backends, executable/library/data discovery, IPA phonemization, batching, voice enumeration, clause handling, and explicit runtime capability/error models."
+    public_impact: public
+    decision: accepted
+    target_entry_key: null
+    target_entry_id: null
+    notes: ""
+    stale: false
+  - sha: b5d820081cd277fac89400efd40ac6163203652e
+    inspected: true
+    inspected_paths:
+      - .ledger/releaseledger/config.toml
+      - docs/Makefile
+      - docs/conf.py
+      - docs/make.bat
+      - docs/make.py
+      - docs/requirements.txt
+      - pyproject.toml
+      - tests/test_packaging.py
+    observed_behavior: "Added Sphinx documentation build configuration and Python-version-compatible TOML parsing for packaging tests."
+    public_impact: docs
+    decision: accepted
+    target_entry_key: null
+    target_entry_id: null
+    notes: ""
+    stale: false
+  - sha: 87c501426a62cc2c59fd0dfb12b8d15b1343494b
+    inspected: true
+    inspected_paths:
+      - .github/workflows/codecov.yml
+      - .github/workflows/python-publish.yml
+    observed_behavior: "Added continuous integration workflows for linting, cross-platform tests, coverage reporting, and package publication."
+    public_impact: internal
+    decision: internal
+    target_entry_key: null
+    target_entry_id: null
+    notes: ""
+    stale: false

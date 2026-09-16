@@ -1,0 +1,2024 @@
+ .codecrate.toml                                 |  24 ++
+ .github/workflows/pre-commit.yml                |  31 ++
+ .github/workflows/tests.yml                     |  32 ++
+ .gitignore                                      |   6 +-
+ .ledger/ledger.toml                             |  24 ++
+ .ledger/releaseledger/.ledger-project.toml      |   6 +
+ .ledger/releaseledger/config.toml               |  56 ++++
+ .ledger/releaseledger/data/.ledger-project.toml |   6 +
+ .ledger/taskledger/.ledger-project.toml         |   6 +
+ .ledger/taskledger/config.toml                  |   7 +
+ .pre-commit-config.yaml                         |  64 ++++
+ MIGRATION.md                                    |  49 +++
+ README.md                                       | 100 +++++-
+ espeakng_runtime/__init__.py                    |  33 ++
+ espeakng_runtime/_text.py                       |  29 ++
+ espeakng_runtime/backends/__init__.py           |   6 +
+ espeakng_runtime/backends/base.py               |  39 +++
+ espeakng_runtime/backends/cli.py                | 195 ++++++++++++
+ espeakng_runtime/backends/native.py             | 402 ++++++++++++++++++++++++
+ espeakng_runtime/discovery.py                   | 295 +++++++++++++++++
+ espeakng_runtime/errors.py                      |  25 ++
+ espeakng_runtime/py.typed                       |   0
+ espeakng_runtime/runtime.py                     | 140 +++++++++
+ espeakng_runtime/types.py                       |  43 +++
+ pyproject.toml                                  |  79 +++++
+ tests/test_discovery.py                         |  22 ++
+ tests/test_live_espeak.py                       |  27 ++
+ tests/test_packaging.py                         |  15 +
+ tests/test_runtime_selection.py                 |  36 +++
+ tests/test_text.py                              |   8 +
+ 30 files changed, 1802 insertions(+), 3 deletions(-)
+
+diff --git a/.codecrate.toml b/.codecrate.toml
+new file mode 100644
+index 0000000..223aac1
+--- /dev/null
++++ b/.codecrate.toml
+@@ -0,0 +1,24 @@
++[codecrate]
++output = "context_espeakng_runtime.md"
++keep_docstrings = true
++dedupe = true
++respect_gitignore = true
++exclude = ["*/.venv/*", "context_espeakng_runtime.*"]
++include = [
++  "**/*.py",
++  "**/*.json",
++  "**/*.toml",
++  "**/*.rst",
++  "**/*.md",
++  "**/*.yaml",
++  "**/*.yml",
++  "**/py.typed",
++  "**/NOTICE",
++  "**/NOTICE.*",
++  "**/MANIFEST.in",
++  "LICENSE*",
++]
++split_max_chars = 2500000
++layout = "full"
++profile = "portable-agent"
++emit_standalone_unpacker = true
+diff --git a/.github/workflows/pre-commit.yml b/.github/workflows/pre-commit.yml
+new file mode 100644
+index 0000000..0e24e53
+--- /dev/null
++++ b/.github/workflows/pre-commit.yml
+@@ -0,0 +1,31 @@
++name: pre-commit
++
++on:
++  pull_request:
++  push:
++
++jobs:
++  pre-commit:
++    runs-on: ubuntu-latest
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - uses: actions/setup-python@v5
++        with:
++          python-version: "3.13"
++
++      - uses: actions/setup-node@v4
++        with:
++          node-version: "20"
++
++      - name: Install Python tools
++        run: |
++          python -m pip install --upgrade pip
++          python -m pip install "ruff==0.16.0"
++
++      - name: Install Node tools
++        run: |
++          npm install -g prettier@2.7.1 @prettier/plugin-xml@2.2.0 eslint
++
++      - uses: pre-commit/action@v3.0.1
+diff --git a/.github/workflows/tests.yml b/.github/workflows/tests.yml
+new file mode 100644
+index 0000000..920b6f5
+--- /dev/null
++++ b/.github/workflows/tests.yml
+@@ -0,0 +1,32 @@
++name: tests
++
++on:
++  push:
++  pull_request:
++  workflow_dispatch:
++
++jobs:
++  pytest:
++    strategy:
++      fail-fast: false
++      matrix:
++        os: [ubuntu-latest, macos-latest, windows-latest]
++        python-version: ["3.10", "3.12", "3.14"]
++    runs-on: ${{ matrix.os }}
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-python@v5
++        with:
++          python-version: ${{ matrix.python-version }}
++      - name: Install eSpeak NG (Ubuntu)
++        if: runner.os == 'Linux'
++        run: sudo apt-get update && sudo apt-get install -y espeak-ng
++      - name: Install eSpeak NG (macOS)
++        if: runner.os == 'macOS'
++        run: brew install espeak-ng
++      - name: Install package
++        run: python -m pip install -e ".[dev]"
++      - name: Test
++        run: python -m pytest
++      - name: Lint
++        run: python -m ruff check .
+diff --git a/.gitignore b/.gitignore
+index 83972fa..2ddc20a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -195,9 +195,9 @@ cython_debug/
+ .abstra/
+
+ # Visual Studio Code
+-#   Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
++#   Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
+ #   that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
+-#   and can be added to the global gitignore or merged into this file. However, if you prefer,
++#   and can be added to the global gitignore or merged into this file. However, if you prefer,
+ #   you could uncomment the following to ignore the entire vscode folder
+ # .vscode/
+ # Temporary file for partial code execution
+@@ -216,3 +216,5 @@ __marimo__/
+
+ # Streamlit
+ .streamlit/secrets.toml
++context_espeakng_runtime*.*
++espeakng_runtime/_version.py
+diff --git a/.ledger/ledger.toml b/.ledger/ledger.toml
+new file mode 100644
+index 0000000..739c436
+--- /dev/null
++++ b/.ledger/ledger.toml
+@@ -0,0 +1,24 @@
++schema_version = 3
++
++[project]
++uuid = "e8d579f8-dfc3-4f2b-99ea-53d11afee6bc"
++name = "espeakng-runtime"
++
++[ledgers.taskledger.mounts.data]
++storage = "external"
++root = "../ledger"
++
++[ledgers.taskledger.mounts.runtime]
++storage = "user-data"
++
++[ledgers.taskledger.mounts.logs]
++storage = "user-data"
++
++[ledgers.taskledger.mounts.indexes]
++storage = "cache"
++
++[ledgers.releaseledger.mounts.data]
++storage = "project"
++
++[ledgers.releaseledger.mounts.indexes]
++storage = "cache"
+diff --git a/.ledger/releaseledger/.ledger-project.toml b/.ledger/releaseledger/.ledger-project.toml
+new file mode 100644
+index 0000000..e7978ac
+--- /dev/null
++++ b/.ledger/releaseledger/.ledger-project.toml
+@@ -0,0 +1,6 @@
++schema_version = 1
++layout_version = 3
++project_uuid = "e8d579f8-dfc3-4f2b-99ea-53d11afee6bc"
++tool = "releaseledger"
++mount = "config"
++storage = "project"
+diff --git a/.ledger/releaseledger/config.toml b/.ledger/releaseledger/config.toml
+new file mode 100644
+index 0000000..8d89e2a
+--- /dev/null
++++ b/.ledger/releaseledger/config.toml
+@@ -0,0 +1,56 @@
++config_version = 2
++# Branch-scoped release state. This block is safe to commit.
++ledger_ref = "main"
++ledger_parent_ref = ""
++ledger_branch_guard = "off"
++# Cross-ledger identity. Local record IDs stay unchanged.
++
++[ledger]
++code = "rl"
++# Release defaults.
++
++[release]
++default_changelog = "CHANGELOG.md"
++default_status = "planned"
++allow_dirty_worktree = true
++# Changelog build defaults.
++
++[changelog]
++output = "CHANGELOG.md"
++header = ""
++body = """## {% if release.date %}[{{ release.version }}] - {{ release.date }}{% else %}[{{ release.version }}] - Unreleased{% endif %}
++
++{% for group in groups %}
++### {{ group.title }}
++{% for entry in group.entries %}
++- {% if entry.breaking %}**BREAKING:** {% endif %}{{ entry.summary }}
++{% endfor %}
++
++{% endfor %}
++"""
++footer = "<!-- generated by releaseledger -->"
++trim = true
++render_always = false
++postprocessors = []
++standard = ""
++group_mode = "extended"
++link_references = false
++repository_url = ""
++tag_prefix = "v"
++compare_url_template = ""
++release_url_template = ""
++preamble = ""
++semver = false
++unreleased = true
++# Git-first release evidence.
++
++[git]
++enabled = true
++default_base = "previous_release_tag"
++default_head = "HEAD"
++previous_tag_patterns = ["v{version}", "{version}"]
++include_merges = "nontrivial"
++require_clean_worktree = false
++max_commits = 500
++max_diff_chars_per_commit = 12000
++candidate_status = "draft"
+diff --git a/.ledger/releaseledger/data/.ledger-project.toml b/.ledger/releaseledger/data/.ledger-project.toml
+new file mode 100644
+index 0000000..4d7c941
+--- /dev/null
++++ b/.ledger/releaseledger/data/.ledger-project.toml
+@@ -0,0 +1,6 @@
++schema_version = 1
++layout_version = 3
++project_uuid = "e8d579f8-dfc3-4f2b-99ea-53d11afee6bc"
++tool = "releaseledger"
++mount = "data"
++storage = "project"
+diff --git a/.ledger/taskledger/.ledger-project.toml b/.ledger/taskledger/.ledger-project.toml
+new file mode 100644
+index 0000000..f642ad3
+--- /dev/null
++++ b/.ledger/taskledger/.ledger-project.toml
+@@ -0,0 +1,6 @@
++schema_version = 1
++layout_version = 3
++project_uuid = "e8d579f8-dfc3-4f2b-99ea-53d11afee6bc"
++tool = "taskledger"
++mount = "config"
++storage = "project"
+diff --git a/.ledger/taskledger/config.toml b/.ledger/taskledger/config.toml
+new file mode 100644
+index 0000000..6f94549
+--- /dev/null
++++ b/.ledger/taskledger/config.toml
+@@ -0,0 +1,7 @@
++# Project-local Taskledger configuration.
++# Storage topology belongs to Ledgercore; branch state belongs to data/state.toml.
++config_version = 3
++
++[ledger]
++code = 'tl'
++name = 'taskledger'
+diff --git a/.pre-commit-config.yaml b/.pre-commit-config.yaml
+new file mode 100644
+index 0000000..61a9e5e
+--- /dev/null
++++ b/.pre-commit-config.yaml
+@@ -0,0 +1,64 @@
++exclude: |
++  # NOT INSTALLABLE ADDONS
++  # END NOT INSTALLABLE ADDONS
++  # Files and folders generated by bots, to avoid loops
++  ^setup/|/static/description/index\.html$|
++  # We don't want to mess with tool-generated files
++  .svg$|/tests/([^/]+/)?cassettes/|^.copier-answers.yml$|^.github/|
++  # Maybe reactivate this when all README files include prettier ignore tags?
++  ^README\.md$|
++  # Repos using Sphinx to generate docs don't need prettying
++  ^docs/_templates/.*\.html$|
++  # Don't bother non-technical authors with formatting issues in docs
++  readme/.*\.(rst|md)$|
++  # Ignore build and dist directories in addons
++  /build/|/dist/|/dev/|/notnebooks/
++  # You don't usually want a bot to modify your legal texts
++  (LICENSE.*|COPYING.*)|
++default_language_version:
++  python: python3
++repos:
++  - repo: local
++    hooks:
++      - id: ruff-check
++        name: ruff check
++        entry: ruff check --exit-non-zero-on-fix --force-exclude
++        language: system
++        types_or: [python, pyi]
++      - id: ruff-format
++        name: ruff format
++        entry: ruff format --force-exclude
++        language: system
++        types_or: [python, pyi]
++  - repo: https://github.com/asottile/pyupgrade
++    rev: v3.21.2
++    hooks:
++      - id: pyupgrade
++        args: [--py310-plus]
++  - repo: https://github.com/pre-commit/pre-commit-hooks
++    rev: v6.0.0
++    hooks:
++      - id: check-toml
++      - id: check-yaml
++      - id: end-of-file-fixer
++      - id: trailing-whitespace
++      - id: check-symlinks
++      - id: check-xml
++      - id: mixed-line-ending
++        args: ["--fix=lf"]
++      - id: debug-statements
++      - id: check-case-conflict
++      - id: check-docstring-first
++      - id: check-executables-have-shebangs
++      - id: check-merge-conflict
++  - repo: https://github.com/pre-commit/mirrors-prettier
++    rev: v4.0.0-alpha.8
++    hooks:
++      - id: prettier
++        name: prettier (with plugin-xml)
++        additional_dependencies:
++          - "prettier@2.7.1"
++          - "@prettier/plugin-xml@2.2.0"
++        args:
++          - --plugin=@prettier/plugin-xml
++        files: \.(css|htm|html|js|json|jsx|less|md|scss|toml|ts|xml|yaml|yml)$
+diff --git a/MIGRATION.md b/MIGRATION.md
+new file mode 100644
+index 0000000..d2b44b8
+--- /dev/null
++++ b/MIGRATION.md
+@@ -0,0 +1,49 @@
++# Migration sketch
++
++## KokoroG2P
++
++Keep Kokoro-specific conversion outside this package:
++
++```python
++from espeakng_runtime import EspeakRuntime
++
++self._espeak = EspeakRuntime(
++    mode="cli" if use_cli else "auto",
++    executable=legacy_executable,
++    library=legacy_library,
++    data=legacy_data,
++)
++
++raw = self._espeak.phonemize(
++    text,
++    voice=language,
++    separator=None if use_tie else "_",
++    use_tie=use_tie,
++)
++# existing kokorog2p from_espeak/raw-vocabulary handling follows here
++```
++
++## PiperG2P
++
++Keep Piper's clause composition and phone-id mapping outside this package:
++
++```python
++from espeakng_runtime import EspeakRuntime
++
++self._espeak = EspeakRuntime(
++    mode=mode,
++    executable=legacy_executable,
++    library=legacy_library,
++    data=legacy_data,
++    require_exact_clauses=(mode != "cli"),
++)
++
++clauses = self._espeak.clauses(text, voice=voice)
++# existing Piper NFD/terminator/vowel-cluster composition follows here
++```
++
++For strict reference checks:
++
++```python
++clauses = self._espeak.clauses(text, voice=voice, exact=True)
++```
+diff --git a/README.md b/README.md
+index 5a6d0ac..18a6e56 100644
+--- a/README.md
++++ b/README.md
+@@ -1 +1,99 @@
+-# espeakng-runtime
+\ No newline at end of file
++# espeakng-runtime
++
++A small Python runtime adapter for **eSpeak NG** phonemization.
++
++The package deliberately does not implement G2P policy for Kokoro, Piper, or any
++other model. It centralizes the shared eSpeak plumbing:
++
++- executable, shared-library, and data discovery
++- optional `espeakng-loader` integration
++- native `ctypes` execution with process-wide locking
++- CLI fallback
++- voice enumeration
++- IPA phonemization and batching
++- exact native clause/terminator output when the loaded library exposes
++  `espeak_TextToPhonemesWithTerminator`
++- explicit runtime diagnostics/capabilities
++
++## Layout
++
++This project intentionally uses a flat package layout (no `src/` directory):
++
++```text
++espeakng_runtime/
++tests/
++pyproject.toml
++```
++
++## Versioning
++
++The version is dynamic and comes from Git tags through `setuptools-scm`.
++For source archives without Git metadata, the MVP falls back to `0.1.dev0` so
++an unpacked zip remains installable.
++
++```bash
++git tag v0.1.0
++python -m build
++```
++
++## Install
++
++Use a system eSpeak/eSpeak NG installation:
++
++```bash
++pip install espeakng-runtime
++```
++
++Or install the optional binary/data loader:
++
++```bash
++pip install "espeakng-runtime[bundled]"
++```
++
++## Quick start
++
++```python
++from espeakng_runtime import EspeakRuntime
++
++with EspeakRuntime(mode="auto") as espeak:
++    print(espeak.info)
++    print(espeak.phonemize("Hello world", voice="en-us"))
++    print(espeak.phonemize("Hello world", voice="en-us", separator="_"))
++    print(espeak.clauses("Hello, world!", voice="en-us"))
++```
++
++`mode` is `"auto"`, `"native"`, or `"cli"`. `auto` prefers a working native
++library and falls back to the command-line executable.
++
++For Piper-style exact clause handling, request an exact-capable runtime:
++
++```python
++from espeakng_runtime import EspeakRuntime
++
++with EspeakRuntime(mode="auto", prefer_exact_clauses=True) as espeak:
++    clauses = espeak.clauses("Hello, world!", voice="en-us", exact=True)
++```
++
++In `auto` mode, `prefer_exact_clauses=True` chooses an exact-capable native
++library when possible and otherwise falls back to CLI best-effort clauses.
++Calling `clauses(..., exact=True)` on a non-exact backend raises
++`CapabilityError` rather than silently degrading.
++
++## Configuration
++
++Explicit constructor arguments take precedence over environment variables:
++
++- `ESPEAKNG_RUNTIME_EXECUTABLE`
++- `ESPEAKNG_RUNTIME_LIBRARY`
++- `ESPEAKNG_RUNTIME_DATA`
++
++The library intentionally does not read KokoroG2P/PiperG2P-specific variables;
++those projects can map their legacy configuration into constructor arguments
++during migration.
++
++## MVP scope
++
++The package returns raw eSpeak output. Model-specific transforms stay in their
++consumer projects. In particular this MVP does **not** contain Kokoro phoneme
++mapping, Piper NFD/phone composition, vowel-cluster merging, lexicons, or G2P
++routing.
+diff --git a/espeakng_runtime/__init__.py b/espeakng_runtime/__init__.py
+new file mode 100644
+index 0000000..c214b87
+--- /dev/null
++++ b/espeakng_runtime/__init__.py
+@@ -0,0 +1,33 @@
++"""Reliable native/CLI access to eSpeak NG phonemization."""
++
++from __future__ import annotations
++
++from .errors import (
++    CapabilityError,
++    EspeakConflictError,
++    EspeakError,
++    EspeakUnavailableError,
++    PhonemizationError,
++    VoiceNotFoundError,
++)
++from .runtime import EspeakRuntime
++from .types import Clause, RuntimeInfo, Voice
++
++try:
++    from ._version import __version__
++except ImportError:  # pragma: no cover - editable tree before build hook runs
++    __version__ = "0.1.dev0"
++
++__all__ = [
++    "CapabilityError",
++    "Clause",
++    "EspeakConflictError",
++    "EspeakError",
++    "EspeakRuntime",
++    "EspeakUnavailableError",
++    "PhonemizationError",
++    "RuntimeInfo",
++    "Voice",
++    "VoiceNotFoundError",
++    "__version__",
++]
+diff --git a/espeakng_runtime/_text.py b/espeakng_runtime/_text.py
+new file mode 100644
+index 0000000..0097dd9
+--- /dev/null
++++ b/espeakng_runtime/_text.py
+@@ -0,0 +1,29 @@
++"""Internal text helpers."""
++
++from __future__ import annotations
++
++import re
++
++_CLAUSE_RE = re.compile(r"(.*?)([.!?]|[,;:]|$)", re.DOTALL)
++
++
++def split_best_effort_clauses(text: str) -> list[tuple[str, str | None, bool]]:
++    """Split punctuation for CLI/non-exact fallback.
++
++    This is intentionally labeled best-effort: it is not a replacement for
++    eSpeak NG's native terminator API.
++    """
++    result: list[tuple[str, str | None, bool]] = []
++    position = 0
++    for match in _CLAUSE_RE.finditer(text):
++        if match.start() != position:
++            continue
++        body, terminator = match.groups()
++        if not body and not terminator:
++            break
++        token = terminator or None
++        result.append((body, token, token in {".", "!", "?"}))
++        position = match.end()
++        if position >= len(text):
++            break
++    return result
+diff --git a/espeakng_runtime/backends/__init__.py b/espeakng_runtime/backends/__init__.py
+new file mode 100644
+index 0000000..a2c4235
+--- /dev/null
++++ b/espeakng_runtime/backends/__init__.py
+@@ -0,0 +1,6 @@
++"""Backend implementations."""
++
++from .cli import CliBackend
++from .native import NativeBackend
++
++__all__ = ["CliBackend", "NativeBackend"]
+diff --git a/espeakng_runtime/backends/base.py b/espeakng_runtime/backends/base.py
+new file mode 100644
+index 0000000..2a0dc8d
+--- /dev/null
++++ b/espeakng_runtime/backends/base.py
+@@ -0,0 +1,39 @@
++"""Backend protocol."""
++
++from __future__ import annotations
++
++from collections.abc import Sequence
++from typing import Protocol
++
++from ..types import Clause, RuntimeInfo, Voice
++
++
++class EspeakBackend(Protocol):
++    @property
++    def info(self) -> RuntimeInfo: ...
++
++    def phonemize(
++        self,
++        text: str,
++        *,
++        voice: str,
++        separator: str | None = None,
++        use_tie: bool = False,
++        tie_char: str = "͡",
++    ) -> str: ...
++
++    def phonemize_many(
++        self,
++        texts: Sequence[str],
++        *,
++        voice: str,
++        separator: str | None = None,
++        use_tie: bool = False,
++        tie_char: str = "͡",
++    ) -> list[str]: ...
++
++    def clauses(self, text: str, *, voice: str, exact: bool = False) -> list[Clause]: ...
++
++    def list_voices(self, filter_name: str | None = None) -> list[Voice]: ...
++
++    def close(self) -> None: ...
+diff --git a/espeakng_runtime/backends/cli.py b/espeakng_runtime/backends/cli.py
+new file mode 100644
+index 0000000..be64afe
+--- /dev/null
++++ b/espeakng_runtime/backends/cli.py
+@@ -0,0 +1,195 @@
++"""Command-line eSpeak backend."""
++
++from __future__ import annotations
++
++import re
++import subprocess
++from collections.abc import Sequence
++
++from .._text import split_best_effort_clauses
++from ..errors import CapabilityError, PhonemizationError
++from ..types import Clause, RuntimeInfo, Voice
++
++_VERSION_RE = re.compile(r"(?:eSpeak NG|eSpeak)[^0-9]*([0-9]+(?:\.[0-9]+)+)", re.I)
++
++
++class CliBackend:
++    def __init__(
++        self,
++        *,
++        executable: str,
++        data: str | None,
++        timeout: float | None,
++        requested_mode: str,
++        fallback_reason: str | None = None,
++    ) -> None:
++        self.executable = executable
++        self.data = data
++        self.timeout = timeout
++        self.requested_mode = requested_mode
++        self.fallback_reason = fallback_reason
++        self._version: str | None = None
++
++    def _run(
++        self,
++        args: list[str],
++        *,
++        input_text: str | None = None,
++    ) -> subprocess.CompletedProcess[str]:
++        command = [self.executable, *args]
++        if self.data:
++            command.append(f"--path={self.data}")
++        try:
++            process = subprocess.run(
++                command,
++                input=input_text,
++                text=True,
++                encoding="utf-8",
++                errors="strict",
++                capture_output=True,
++                check=False,
++                timeout=self.timeout,
++            )
++        except (OSError, subprocess.SubprocessError) as exc:
++            raise PhonemizationError(f"eSpeak CLI invocation failed: {exc}") from exc
++        if process.returncode:
++            raise PhonemizationError(
++                f"eSpeak failed ({process.returncode}): {process.stderr.strip()}"
++            )
++        return process
++
++    @property
++    def version(self) -> str | None:
++        if self._version is None:
++            process = self._run(["--version"])
++            output = f"{process.stdout}\n{process.stderr}"
++            match = _VERSION_RE.search(output)
++            self._version = match.group(1) if match else output.strip().splitlines()[0]
++        return self._version
++
++    @property
++    def info(self) -> RuntimeInfo:
++        return RuntimeInfo(
++            requested_mode=self.requested_mode,  # type: ignore[arg-type]
++            implementation="cli",
++            executable=self.executable,
++            data=self.data,
++            source="cli",
++            version=self.version,
++            exact_clause_api=False,
++            parity="best-effort",
++            fallback_reason=self.fallback_reason,
++        )
++
++    @staticmethod
++    def _phoneme_args(
++        *,
++        voice: str,
++        separator: str | None,
++        use_tie: bool,
++        tie_char: str,
++    ) -> list[str]:
++        args = ["-q", "-x", "--ipa", f"-v{voice}"]
++        if use_tie:
++            if not tie_char:
++                raise ValueError("tie_char must not be empty")
++            args.append(f"--tie={tie_char[0]}")
++        elif separator:
++            args.append(f"--sep={separator[0]}")
++        return args
++
++    def phonemize(
++        self,
++        text: str,
++        *,
++        voice: str,
++        separator: str | None = None,
++        use_tie: bool = False,
++        tie_char: str = "͡",
++    ) -> str:
++        if not text or not text.strip():
++            return ""
++        process = self._run(
++            self._phoneme_args(
++                voice=voice,
++                separator=separator,
++                use_tie=use_tie,
++                tie_char=tie_char,
++            ),
++            input_text=text if text.endswith("\n") else f"{text}\n",
++        )
++        return re.sub(r"\s+", " ", process.stdout.strip())
++
++    def phonemize_many(
++        self,
++        texts: Sequence[str],
++        *,
++        voice: str,
++        separator: str | None = None,
++        use_tie: bool = False,
++        tie_char: str = "͡",
++    ) -> list[str]:
++        values = list(texts)
++        nonempty = [text for text in values if text and text.strip()]
++        if not nonempty:
++            return [""] * len(values)
++        if any("\n" in text or "\r" in text for text in nonempty):
++            raise ValueError("phonemize_many inputs must not contain line breaks")
++        process = self._run(
++            self._phoneme_args(
++                voice=voice,
++                separator=separator,
++                use_tie=use_tie,
++                tie_char=tie_char,
++            ),
++            input_text="\n".join(nonempty) + "\n",
++        )
++        lines = process.stdout.splitlines()
++        if len(lines) != len(nonempty):
++            raise PhonemizationError(
++                f"eSpeak returned {len(lines)} lines for {len(nonempty)} inputs"
++            )
++        iterator = iter(lines)
++        result: list[str] = []
++        for text in values:
++            if not text or not text.strip():
++                result.append("")
++            else:
++                result.append(re.sub(r"\s+", " ", next(iterator).strip()))
++        return result
++
++    def clauses(self, text: str, *, voice: str, exact: bool = False) -> list[Clause]:
++        if exact:
++            raise CapabilityError("CLI eSpeak does not expose exact clause terminator codes")
++        return [
++            Clause(
++                phonemes=self.phonemize(body, voice=voice),
++                terminator=terminator,
++                terminator_code=None,
++                sentence_end=sentence_end,
++            )
++            for body, terminator, sentence_end in split_best_effort_clauses(text)
++        ]
++
++    def list_voices(self, filter_name: str | None = None) -> list[Voice]:
++        args = [f"--voices={filter_name}"] if filter_name else ["--voices"]
++        process = self._run(args)
++        voices: list[Voice] = []
++        for line in process.stdout.splitlines():
++            line = line.strip()
++            if not line or line.lower().startswith("pty"):
++                continue
++            parts = line.split()
++            if len(parts) < 5:
++                continue
++            voices.append(
++                Voice(
++                    name=parts[3].replace("_", " "),
++                    language=parts[1],
++                    identifier=parts[4].replace("\\", "/"),
++                )
++            )
++        return voices
++
++    def close(self) -> None:
++        return None
+diff --git a/espeakng_runtime/backends/native.py b/espeakng_runtime/backends/native.py
+new file mode 100644
+index 0000000..879c6cf
+--- /dev/null
++++ b/espeakng_runtime/backends/native.py
+@@ -0,0 +1,402 @@
++"""Native ctypes backend for eSpeak/eSpeak NG."""
++
++from __future__ import annotations
++
++import ctypes
++import threading
++from collections.abc import Sequence
++from pathlib import Path
++
++from .._text import split_best_effort_clauses
++from ..errors import (
++    CapabilityError,
++    EspeakConflictError,
++    EspeakUnavailableError,
++    PhonemizationError,
++    VoiceNotFoundError,
++)
++from ..types import Clause, RuntimeInfo, Voice
++
++AUDIO_OUTPUT_SYNCHRONOUS = 2
++CHARS_UTF8 = 1
++PHONEMES_IPA = 0x02
++PHONEMES_TIE = 0x80
++
++_TERMINATORS: dict[int, tuple[str, bool]] = {
++    0x41000: (",", False),
++    0x42000: (":", False),
++    0x43000: (";", False),
++    0x48000: (".", True),
++    0x82000: ("?", True),
++    0x83000: ("!", True),
++}
++
++
++class _VoiceStruct(ctypes.Structure):
++    _fields_ = [
++        ("name", ctypes.c_char_p),
++        ("languages", ctypes.c_char_p),
++        ("identifier", ctypes.c_char_p),
++        ("gender", ctypes.c_ubyte),
++        ("age", ctypes.c_ubyte),
++        ("variant", ctypes.c_ubyte),
++        ("xx1", ctypes.c_ubyte),
++        ("score", ctypes.c_int),
++        ("spare", ctypes.c_void_p),
++    ]
++
++
++def _decode(value: bytes | None) -> str:
++    return value.decode("utf-8", errors="replace") if value else ""
++
++
++def _voice_language(value: bytes | None) -> str:
++    if not value:
++        return ""
++    # eSpeak language records are priority-byte + language strings. For the
++    # common one-language case, skipping the first priority byte is sufficient.
++    payload = value[1:] if len(value) > 1 else b""
++    return payload.split(b"\0", 1)[0].decode("utf-8", errors="replace")
++
++
++def _path_identity(value: str | None) -> str | None:
++    if value is None:
++        return None
++    path = Path(value)
++    if path.is_absolute() or path.exists():
++        try:
++            return str(path.resolve())
++        except OSError:
++            pass
++    return value
++
++
++def _init_data_path(data: str | None) -> bytes | None:
++    if not data:
++        return None
++    path = Path(data)
++    # espeak_Initialize accepts a path whose child is espeak-ng-data. Loader
++    # packages generally return the espeak-ng-data directory itself.
++    value = path.parent if path.name in {"espeak-ng-data", "espeak-data"} else path
++    return str(value).encode("utf-8")
++
++
++class _NativeManager:
++    """One process-wide native runtime; eSpeak itself uses global state."""
++
++    def __init__(self) -> None:
++        self.lock = threading.RLock()
++        self.library: ctypes.CDLL | None = None
++        self.library_path: str | None = None
++        self.data_path: str | None = None
++        self.version: str | None = None
++        self.users = 0
++
++    def acquire(self, library_path: str, data_path: str | None) -> ctypes.CDLL:
++        with self.lock:
++            requested_library = _path_identity(library_path)
++            requested_data = _path_identity(data_path)
++            if self.library is not None:
++                if _path_identity(self.library_path) != requested_library:
++                    raise EspeakConflictError(
++                        "a different eSpeak shared library is already active in this process"
++                    )
++                if requested_data and _path_identity(self.data_path) not in {None, requested_data}:
++                    raise EspeakConflictError(
++                        "a different eSpeak data directory is already active in this process"
++                    )
++                self.users += 1
++                return self.library
++
++            try:
++                loaded = ctypes.CDLL(library_path)
++            except OSError as exc:
++                raise EspeakUnavailableError(
++                    f"could not load eSpeak library {library_path!r}: {exc}"
++                ) from exc
++            self._configure(loaded)
++            result = loaded.espeak_Initialize(
++                AUDIO_OUTPUT_SYNCHRONOUS,
++                0,
++                _init_data_path(data_path),
++                0,
++            )
++            if result < 0:
++                raise EspeakUnavailableError(f"eSpeak initialization failed with code {result}")
++
++            self.library = loaded
++            self.library_path = library_path
++            self.data_path = data_path
++            if hasattr(loaded, "espeak_Info"):
++                reported = ctypes.c_char_p()
++                version = loaded.espeak_Info(ctypes.byref(reported))
++                self.version = _decode(version)
++                if reported.value:
++                    self.data_path = _decode(reported.value)
++            self.users = 1
++            return loaded
++
++    @staticmethod
++    def _configure(library: ctypes.CDLL) -> None:
++        library.espeak_Initialize.argtypes = [
++            ctypes.c_int,
++            ctypes.c_int,
++            ctypes.c_char_p,
++            ctypes.c_int,
++        ]
++        library.espeak_Initialize.restype = ctypes.c_int
++        library.espeak_SetVoiceByName.argtypes = [ctypes.c_char_p]
++        library.espeak_SetVoiceByName.restype = ctypes.c_int
++        library.espeak_Terminate.argtypes = []
++        library.espeak_Terminate.restype = ctypes.c_int
++        library.espeak_TextToPhonemes.argtypes = [
++            ctypes.POINTER(ctypes.c_void_p),
++            ctypes.c_int,
++            ctypes.c_int,
++        ]
++        library.espeak_TextToPhonemes.restype = ctypes.c_char_p
++        if hasattr(library, "espeak_TextToPhonemesWithTerminator"):
++            func = library.espeak_TextToPhonemesWithTerminator
++            func.argtypes = [
++                ctypes.POINTER(ctypes.c_void_p),
++                ctypes.c_int,
++                ctypes.c_int,
++                ctypes.POINTER(ctypes.c_int),
++            ]
++            func.restype = ctypes.c_char_p
++        if hasattr(library, "espeak_Info"):
++            library.espeak_Info.argtypes = [ctypes.POINTER(ctypes.c_char_p)]
++            library.espeak_Info.restype = ctypes.c_char_p
++        if hasattr(library, "espeak_ListVoices"):
++            library.espeak_ListVoices.argtypes = [ctypes.POINTER(_VoiceStruct)]
++            library.espeak_ListVoices.restype = ctypes.POINTER(ctypes.POINTER(_VoiceStruct))
++
++    def release(self) -> None:
++        with self.lock:
++            self.users = max(0, self.users - 1)
++            if self.users == 0 and self.library is not None:
++                try:
++                    self.library.espeak_Terminate()
++                finally:
++                    self.library = None
++                    self.library_path = None
++                    self.data_path = None
++                    self.version = None
++
++
++_MANAGER = _NativeManager()
++
++
++class NativeBackend:
++    def __init__(
++        self,
++        *,
++        library: str,
++        data: str | None,
++        executable: str | None,
++        source: str,
++        requested_mode: str,
++        fallback_reason: str | None = None,
++    ) -> None:
++        self._closed = False
++        self._library = _MANAGER.acquire(library, data)
++        self._library_arg = library
++        self._data_arg = data
++        self._executable = executable
++        self._source = source
++        self._requested_mode = requested_mode
++        self._fallback_reason = fallback_reason
++        self.exact_clause_api = hasattr(self._library, "espeak_TextToPhonemesWithTerminator")
++
++    @property
++    def info(self) -> RuntimeInfo:
++        return RuntimeInfo(
++            requested_mode=self._requested_mode,  # type: ignore[arg-type]
++            implementation="native",
++            executable=self._executable,
++            library=_MANAGER.library_path or self._library_arg,
++            data=_MANAGER.data_path or self._data_arg,
++            source=self._source,
++            version=_MANAGER.version,
++            exact_clause_api=self.exact_clause_api,
++            parity="exact" if self.exact_clause_api else "best-effort",
++            fallback_reason=self._fallback_reason,
++        )
++
++    def _ensure_open(self) -> None:
++        if self._closed:
++            raise PhonemizationError("native eSpeak backend is closed")
++
++    def _set_voice(self, voice: str) -> None:
++        result = self._library.espeak_SetVoiceByName(voice.encode("utf-8"))
++        if result != 0:
++            raise VoiceNotFoundError(f"eSpeak voice {voice!r} was not found (code {result})")
++
++    @staticmethod
++    def _phoneme_mode(
++        separator: str | None,
++        use_tie: bool,
++        tie_char: str,
++    ) -> int:
++        mode = PHONEMES_IPA
++        if use_tie:
++            if not tie_char:
++                raise ValueError("tie_char must not be empty")
++            mode |= PHONEMES_TIE
++            mode |= ord(tie_char[0]) << 8
++        elif separator:
++            mode |= ord(separator[0]) << 8
++        return mode
++
++    def _phonemize_locked(
++        self,
++        text: str,
++        *,
++        voice: str,
++        separator: str | None,
++        use_tie: bool,
++        tie_char: str,
++    ) -> str:
++        if not text or not text.strip():
++            return ""
++        self._set_voice(voice)
++        buffer = ctypes.create_string_buffer(text.encode("utf-8") + b"\0")
++        pointer = ctypes.c_void_p(ctypes.addressof(buffer))
++        mode = self._phoneme_mode(separator, use_tie, tie_char)
++        chunks: list[str] = []
++        while pointer.value:
++            previous = pointer.value
++            value = self._library.espeak_TextToPhonemes(ctypes.byref(pointer), CHARS_UTF8, mode)
++            if pointer.value == previous:
++                raise PhonemizationError("espeak_TextToPhonemes made no progress")
++            if value:
++                chunks.append(_decode(value))
++        return " ".join(chunk.strip() for chunk in chunks if chunk.strip()).strip()
++
++    def phonemize(
++        self,
++        text: str,
++        *,
++        voice: str,
++        separator: str | None = None,
++        use_tie: bool = False,
++        tie_char: str = "͡",
++    ) -> str:
++        self._ensure_open()
++        with _MANAGER.lock:
++            return self._phonemize_locked(
++                text,
++                voice=voice,
++                separator=separator,
++                use_tie=use_tie,
++                tie_char=tie_char,
++            )
++
++    def phonemize_many(
++        self,
++        texts: Sequence[str],
++        *,
++        voice: str,
++        separator: str | None = None,
++        use_tie: bool = False,
++        tie_char: str = "͡",
++    ) -> list[str]:
++        self._ensure_open()
++        with _MANAGER.lock:
++            return [
++                self._phonemize_locked(
++                    text,
++                    voice=voice,
++                    separator=separator,
++                    use_tie=use_tie,
++                    tie_char=tie_char,
++                )
++                for text in texts
++            ]
++
++    def _exact_clauses_locked(self, text: str, voice: str) -> list[Clause]:
++        self._set_voice(voice)
++        buffer = ctypes.create_string_buffer(text.encode("utf-8") + b"\0")
++        pointer = ctypes.c_void_p(ctypes.addressof(buffer))
++        clauses: list[Clause] = []
++        while pointer.value:
++            previous = pointer.value
++            terminator = ctypes.c_int(0)
++            value = self._library.espeak_TextToPhonemesWithTerminator(
++                ctypes.byref(pointer),
++                CHARS_UTF8,
++                PHONEMES_IPA,
++                ctypes.byref(terminator),
++            )
++            if pointer.value == previous:
++                raise PhonemizationError("espeak_TextToPhonemesWithTerminator made no progress")
++            token, sentence_end = _TERMINATORS.get(terminator.value & 0xFFF000, (None, False))
++            clauses.append(
++                Clause(
++                    phonemes=_decode(value),
++                    terminator=token,
++                    terminator_code=terminator.value,
++                    sentence_end=sentence_end,
++                )
++            )
++        return clauses
++
++    def clauses(self, text: str, *, voice: str, exact: bool = False) -> list[Clause]:
++        self._ensure_open()
++        if not text:
++            return []
++        with _MANAGER.lock:
++            if self.exact_clause_api:
++                return self._exact_clauses_locked(text, voice)
++            if exact:
++                raise CapabilityError(
++                    "loaded eSpeak library lacks espeak_TextToPhonemesWithTerminator"
++                )
++            return [
++                Clause(
++                    self._phonemize_locked(
++                        body,
++                        voice=voice,
++                        separator=None,
++                        use_tie=False,
++                        tie_char="͡",
++                    ),
++                    terminator,
++                    None,
++                    sentence_end,
++                )
++                for body, terminator, sentence_end in split_best_effort_clauses(text)
++            ]
++
++    def list_voices(self, filter_name: str | None = None) -> list[Voice]:
++        self._ensure_open()
++        if not hasattr(self._library, "espeak_ListVoices"):
++            raise CapabilityError("loaded eSpeak library does not expose espeak_ListVoices")
++        spec: _VoiceStruct | None = None
++        if filter_name:
++            spec = _VoiceStruct()
++            spec.languages = filter_name.encode("utf-8")
++        with _MANAGER.lock:
++            values = self._library.espeak_ListVoices(
++                ctypes.byref(spec) if spec is not None else None
++            )
++            voices: list[Voice] = []
++            index = 0
++            while values and values[index]:
++                item = values[index].contents
++                voices.append(
++                    Voice(
++                        name=_decode(item.name).replace("_", " "),
++                        language=_voice_language(item.languages),
++                        identifier=_decode(item.identifier).replace("\\", "/"),
++                        gender=int(item.gender),
++                        age=int(item.age),
++                    )
++                )
++                index += 1
++            return voices
++
++    def close(self) -> None:
++        if not self._closed:
++            self._closed = True
++            _MANAGER.release()
+diff --git a/espeakng_runtime/discovery.py b/espeakng_runtime/discovery.py
+new file mode 100644
+index 0000000..d597c9d
+--- /dev/null
++++ b/espeakng_runtime/discovery.py
+@@ -0,0 +1,295 @@
++"""Cross-platform eSpeak executable/library/data discovery."""
++
++from __future__ import annotations
++
++import ctypes
++import ctypes.util
++import os
++import shutil
++from dataclasses import dataclass
++from pathlib import Path
++
++from .errors import EspeakUnavailableError
++
++ENV_EXECUTABLE = "ESPEAKNG_RUNTIME_EXECUTABLE"
++ENV_LIBRARY = "ESPEAKNG_RUNTIME_LIBRARY"
++ENV_DATA = "ESPEAKNG_RUNTIME_DATA"
++
++
++@dataclass(frozen=True, slots=True)
++class EspeakPaths:
++    executable: str | None = None
++    library: str | None = None
++    data: str | None = None
++    source: str = "unknown"
++
++
++@dataclass(frozen=True, slots=True)
++class LibraryCandidate:
++    library: str
++    source: str
++    data: str | None = None
++    explicit: bool = False
++
++
++@dataclass(frozen=True, slots=True)
++class LibraryProbe:
++    library: str
++    source: str
++    data: str | None
++    loadable: bool
++    exact_clause_api: bool
++    error: str | None = None
++
++
++def _loader_paths() -> tuple[str, str | None] | None:
++    try:
++        import espeakng_loader  # type: ignore[import-not-found,import-untyped]
++    except ImportError:
++        return None
++
++    library = espeakng_loader.get_library_path()
++    data = espeakng_loader.get_data_path()
++    if library and Path(library).is_file():
++        return str(Path(library)), str(data) if data else None
++    return None
++
++
++def _as_executable(value: str) -> str | None:
++    path = Path(value).expanduser()
++    if path.is_file():
++        return str(path.resolve())
++    found = shutil.which(value)
++    return str(Path(found).resolve()) if found else None
++
++
++def maybe_find_executable(explicit: str | None = None) -> str | None:
++    configured = explicit or os.environ.get(ENV_EXECUTABLE)
++    if configured:
++        return _as_executable(configured)
++    found = shutil.which("espeak-ng") or shutil.which("espeak")
++    return str(Path(found).resolve()) if found else None
++
++
++def find_executable(explicit: str | None = None) -> str:
++    configured = explicit or os.environ.get(ENV_EXECUTABLE)
++    found = maybe_find_executable(explicit)
++    if found:
++        return found
++    if configured:
++        raise EspeakUnavailableError(f"configured eSpeak executable does not exist: {configured}")
++    raise EspeakUnavailableError(
++        f"eSpeak executable was not found; install eSpeak NG or set {ENV_EXECUTABLE}"
++    )
++
++
++def _near_executable_candidates(executable: str | None) -> tuple[Path, ...]:
++    if not executable:
++        return ()
++    path = Path(executable)
++    try:
++        path = path.resolve()
++    except OSError:
++        pass
++    roots = (path.parent, path.parent.parent)
++    patterns = (
++        "libespeak-ng.so*",
++        "libespeak.so*",
++        "libespeak-ng.dylib",
++        "libespeak.dylib",
++        "libespeak-ng.dll",
++        "espeak-ng.dll",
++        "libespeak.dll",
++        "espeak.dll",
++    )
++    values: list[Path] = []
++    for root in roots:
++        for directory in (root, root / "lib", root / "lib64", root / "bin"):
++            for pattern in patterns:
++                values.extend(path for path in directory.glob(pattern) if path.is_file())
++    result: list[Path] = []
++    for value in values:
++        try:
++            value = value.resolve()
++        except OSError:
++            pass
++        if value not in result:
++            result.append(value)
++    return tuple(result)
++
++
++def _derived_data(executable: str | None, library: str | None) -> str | None:
++    candidates: list[Path] = []
++    for value in (executable, library):
++        if not value or ("/" not in value and "\\" not in value):
++            continue
++        path = Path(value)
++        try:
++            path = path.resolve()
++        except OSError:
++            pass
++        roots = (path.parent, path.parent.parent)
++        for root in roots:
++            candidates.extend(
++                (
++                    root / "espeak-ng-data",
++                    root / "share" / "espeak-ng-data",
++                    root / "share" / "espeak-data",
++                    root / "espeak-data",
++                )
++            )
++    for candidate in candidates:
++        if candidate.is_dir():
++            return str(candidate)
++    return None
++
++
++def find_data(
++    explicit: str | None = None,
++    *,
++    executable: str | None = None,
++    library: str | None = None,
++) -> str | None:
++    configured = explicit or os.environ.get(ENV_DATA)
++    if configured:
++        path = Path(configured).expanduser()
++        if path.is_dir():
++            return str(path.resolve())
++        raise EspeakUnavailableError(
++            f"configured eSpeak data directory does not exist: {configured}"
++        )
++    loader = _loader_paths()
++    if loader is not None and loader[1]:
++        return loader[1]
++    return _derived_data(executable, library)
++
++
++def _identity(value: str) -> str:
++    path = Path(value)
++    if path.is_absolute() or path.exists():
++        try:
++            return str(path.resolve())
++        except OSError:
++            pass
++    return value
++
++
++def iter_library_candidates(
++    explicit: str | None = None,
++    *,
++    executable: str | None = None,
++    data: str | None = None,
++) -> tuple[LibraryCandidate, ...]:
++    configured = explicit or os.environ.get(ENV_LIBRARY)
++    if configured:
++        path = Path(configured).expanduser()
++        value = str(path.resolve()) if path.is_file() else configured
++        configured_data = data or os.environ.get(ENV_DATA)
++        if configured_data:
++            data_path = Path(configured_data).expanduser()
++            if not data_path.is_dir():
++                raise EspeakUnavailableError(
++                    f"configured eSpeak data directory does not exist: {configured_data}"
++                )
++            candidate_data = str(data_path.resolve())
++        else:
++            candidate_data = _derived_data(executable, value)
++        return (LibraryCandidate(value, "explicit", candidate_data, True),)
++
++    values: list[LibraryCandidate] = []
++    loader = _loader_paths()
++    if loader is not None:
++        values.append(LibraryCandidate(loader[0], "espeakng-loader", loader[1]))
++
++    for name, source in (("espeak-ng", "system-espeak-ng"), ("espeak", "system-espeak")):
++        found = ctypes.util.find_library(name)
++        if found:
++            values.append(LibraryCandidate(found, source))
++
++    found_executable = executable or maybe_find_executable()
++    values.extend(
++        LibraryCandidate(str(path), "near-executable")
++        for path in _near_executable_candidates(found_executable)
++    )
++
++    result: list[LibraryCandidate] = []
++    seen: set[str] = set()
++    for candidate in values:
++        identity = _identity(candidate.library)
++        if identity in seen:
++            continue
++        seen.add(identity)
++        candidate_data = (
++            data or candidate.data or _derived_data(found_executable, candidate.library)
++        )
++        result.append(
++            LibraryCandidate(
++                library=candidate.library,
++                source=candidate.source,
++                data=candidate_data,
++                explicit=candidate.explicit,
++            )
++        )
++    return tuple(result)
++
++
++def probe_library(candidate: LibraryCandidate) -> LibraryProbe:
++    try:
++        library = ctypes.CDLL(candidate.library)
++    except OSError as exc:
++        return LibraryProbe(
++            candidate.library,
++            candidate.source,
++            candidate.data,
++            False,
++            False,
++            str(exc),
++        )
++    return LibraryProbe(
++        candidate.library,
++        candidate.source,
++        candidate.data,
++        True,
++        hasattr(library, "espeak_TextToPhonemesWithTerminator"),
++        None,
++    )
++
++
++def select_native(
++    *,
++    library: str | None = None,
++    executable: str | None = None,
++    data: str | None = None,
++    require_exact_clauses: bool = False,
++) -> tuple[LibraryCandidate | None, tuple[LibraryProbe, ...]]:
++    probes: list[LibraryProbe] = []
++    for candidate in iter_library_candidates(library, executable=executable, data=data):
++        probe = probe_library(candidate)
++        probes.append(probe)
++        if probe.loadable and (probe.exact_clause_api or not require_exact_clauses):
++            return candidate, tuple(probes)
++    return None, tuple(probes)
++
++
++def discover(
++    *,
++    executable: str | None = None,
++    library: str | None = None,
++    data: str | None = None,
++    require_executable: bool = False,
++) -> EspeakPaths:
++    exe = find_executable(executable) if require_executable else maybe_find_executable(executable)
++    candidate, _ = select_native(
++        library=library,
++        executable=exe,
++        data=data,
++        require_exact_clauses=False,
++    )
++    selected_library = candidate.library if candidate else None
++    selected_data = find_data(
++        data,
++        executable=exe,
++        library=selected_library,
++    )
++    source = candidate.source if candidate else ("cli" if exe else "unknown")
++    return EspeakPaths(exe, selected_library, selected_data, source)
+diff --git a/espeakng_runtime/errors.py b/espeakng_runtime/errors.py
+new file mode 100644
+index 0000000..ddf5a4b
+--- /dev/null
++++ b/espeakng_runtime/errors.py
+@@ -0,0 +1,25 @@
++"""Public exceptions for espeakng-runtime."""
++
++
++class EspeakError(RuntimeError):
++    """Base class for runtime errors."""
++
++
++class EspeakUnavailableError(EspeakError):
++    """Raised when no requested eSpeak backend can be initialized."""
++
++
++class EspeakConflictError(EspeakError):
++    """Raised when incompatible native eSpeak configurations share a process."""
++
++
++class PhonemizationError(EspeakError):
++    """Raised when eSpeak fails while phonemizing text."""
++
++
++class VoiceNotFoundError(PhonemizationError):
++    """Raised when eSpeak cannot select a requested voice."""
++
++
++class CapabilityError(EspeakError):
++    """Raised when the active backend lacks a requested capability."""
+diff --git a/espeakng_runtime/py.typed b/espeakng_runtime/py.typed
+new file mode 100644
+index 0000000..e69de29
+diff --git a/espeakng_runtime/runtime.py b/espeakng_runtime/runtime.py
+new file mode 100644
+index 0000000..1a4a73c
+--- /dev/null
++++ b/espeakng_runtime/runtime.py
+@@ -0,0 +1,140 @@
++"""Public runtime facade."""
++
++from __future__ import annotations
++
++from collections.abc import Sequence
++from typing import Literal
++
++from .backends.base import EspeakBackend
++from .backends.cli import CliBackend
++from .backends.native import NativeBackend
++from .discovery import find_data, find_executable, maybe_find_executable, select_native
++from .errors import EspeakUnavailableError
++from .types import Clause, RuntimeInfo, Voice
++
++Mode = Literal["auto", "native", "cli"]
++
++
++class EspeakRuntime:
++    """Resolve and own one eSpeak backend.
++
++    Native calls are serialized process-wide because eSpeak's public API uses
++    global state, including the currently selected voice.
++    """
++
++    def __init__(
++        self,
++        *,
++        mode: Mode = "auto",
++        executable: str | None = None,
++        library: str | None = None,
++        data: str | None = None,
++        timeout: float | None = None,
++        prefer_exact_clauses: bool = False,
++    ) -> None:
++        if mode not in {"auto", "native", "cli"}:
++            raise ValueError("mode must be 'auto', 'native', or 'cli'")
++        self.mode = mode
++        self._closed = False
++        self._backend: EspeakBackend
++
++        if mode == "cli":
++            cli_executable = find_executable(executable)
++            self._backend = CliBackend(
++                executable=cli_executable,
++                data=find_data(data, executable=cli_executable),
++                timeout=timeout,
++                requested_mode=mode,
++            )
++            return
++
++        found_executable = maybe_find_executable(executable)
++        candidate, probes = select_native(
++            library=library,
++            executable=found_executable,
++            data=data,
++            require_exact_clauses=prefer_exact_clauses,
++        )
++        if candidate is not None:
++            self._backend = NativeBackend(
++                library=candidate.library,
++                data=candidate.data,
++                executable=found_executable,
++                source=candidate.source,
++                requested_mode=mode,
++            )
++            return
++
++        details = "; ".join(
++            f"{probe.library}: {probe.error or 'missing exact clause API'}" for probe in probes
++        )
++        if mode == "native":
++            suffix = f" ({details})" if details else ""
++            raise EspeakUnavailableError(f"no suitable native eSpeak library found{suffix}")
++
++        reason = "no suitable native eSpeak library found"
++        if prefer_exact_clauses:
++            reason += " with exact clause API"
++        cli_executable = find_executable(executable)
++        self._backend = CliBackend(
++            executable=cli_executable,
++            data=find_data(data, executable=cli_executable),
++            timeout=timeout,
++            requested_mode=mode,
++            fallback_reason=reason,
++        )
++
++    @property
++    def info(self) -> RuntimeInfo:
++        return self._backend.info
++
++    def phonemize(
++        self,
++        text: str,
++        *,
++        voice: str,
++        separator: str | None = None,
++        use_tie: bool = False,
++        tie_char: str = "͡",
++    ) -> str:
++        return self._backend.phonemize(
++            text,
++            voice=voice,
++            separator=separator,
++            use_tie=use_tie,
++            tie_char=tie_char,
++        )
++
++    def phonemize_many(
++        self,
++        texts: Sequence[str],
++        *,
++        voice: str,
++        separator: str | None = None,
++        use_tie: bool = False,
++        tie_char: str = "͡",
++    ) -> list[str]:
++        return self._backend.phonemize_many(
++            texts,
++            voice=voice,
++            separator=separator,
++            use_tie=use_tie,
++            tie_char=tie_char,
++        )
++
++    def clauses(self, text: str, *, voice: str, exact: bool = False) -> list[Clause]:
++        return self._backend.clauses(text, voice=voice, exact=exact)
++
++    def list_voices(self, filter_name: str | None = None) -> list[Voice]:
++        return self._backend.list_voices(filter_name)
++
++    def close(self) -> None:
++        if not self._closed:
++            self._closed = True
++            self._backend.close()
++
++    def __enter__(self) -> EspeakRuntime:
++        return self
++
++    def __exit__(self, *_: object) -> None:
++        self.close()
+diff --git a/espeakng_runtime/types.py b/espeakng_runtime/types.py
+new file mode 100644
+index 0000000..8ec9556
+--- /dev/null
++++ b/espeakng_runtime/types.py
+@@ -0,0 +1,43 @@
++"""Small public data models."""
++
++from __future__ import annotations
++
++from dataclasses import dataclass
++from typing import Literal
++
++
++@dataclass(frozen=True, slots=True)
++class Voice:
++    """An eSpeak voice entry."""
++
++    name: str
++    language: str
++    identifier: str
++    gender: int = 0
++    age: int = 0
++
++
++@dataclass(frozen=True, slots=True)
++class Clause:
++    """A phonemized clause plus its source terminator."""
++
++    phonemes: str
++    terminator: str | None = None
++    terminator_code: int | None = None
++    sentence_end: bool = False
++
++
++@dataclass(frozen=True, slots=True)
++class RuntimeInfo:
++    """Resolved backend and capability information."""
++
++    requested_mode: Literal["auto", "native", "cli"]
++    implementation: Literal["native", "cli"]
++    executable: str | None = None
++    library: str | None = None
++    data: str | None = None
++    source: str | None = None
++    version: str | None = None
++    exact_clause_api: bool = False
++    parity: Literal["exact", "best-effort"] = "best-effort"
++    fallback_reason: str | None = None
+diff --git a/pyproject.toml b/pyproject.toml
+new file mode 100644
+index 0000000..ae96b31
+--- /dev/null
++++ b/pyproject.toml
+@@ -0,0 +1,79 @@
++[build-system]
++requires = [
++  "setuptools>=80",
++  "setuptools-scm>=9.2",
++  "wheel",
++]
++build-backend = "setuptools.build_meta"
++
++[project]
++name = "espeakng-runtime"
++dynamic = ["version"]
++description = "Small Python runtime adapter for eSpeak NG phonemization"
++readme = "README.md"
++requires-python = ">=3.10"
++license = {text = "Apache-2.0"}
++authors = [{name = "espeakng-runtime contributors"}]
++keywords = ["espeak", "espeak-ng", "phonemizer", "ipa", "tts", "g2p"]
++dependencies = []
++classifiers = [
++  "Development Status :: 3 - Alpha",
++  "License :: OSI Approved :: Apache Software License",
++  "Programming Language :: Python :: 3",
++  "Programming Language :: Python :: 3.10",
++  "Programming Language :: Python :: 3.11",
++  "Programming Language :: Python :: 3.12",
++  "Programming Language :: Python :: 3.13",
++  "Programming Language :: Python :: 3.14",
++  "Topic :: Multimedia :: Sound/Audio :: Speech",
++  "Topic :: Software Development :: Libraries :: Python Modules",
++]
++
++[project.optional-dependencies]
++bundled = ["espeakng-loader>=0.2.4"]
++dev = [
++  "build>=1",
++  "mypy>=1.10",
++  "pytest>=8",
++  "pytest-cov>=5",
++  "ruff>=0.16",
++  "twine>=5",
++]
++
++[project.urls]
++Repository = "https://github.com/buchwandler/espeakng-runtime"
++Issues = "https://github.com/buchwandler/espeakng-runtime/issues"
++
++[tool.setuptools.packages.find]
++where = ["."]
++include = ["espeakng_runtime*"]
++
++[tool.setuptools.package-data]
++espeakng_runtime = ["py.typed"]
++
++[tool.setuptools_scm]
++write_to = "espeakng_runtime/_version.py"
++fallback_version = "0.1.dev0"
++version_scheme = "guess-next-dev"
++local_scheme = "node-and-date"
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++pythonpath = ["."]
++addopts = "-q"
++markers = [
++  "espeak: requires a working eSpeak/eSpeak NG installation",
++]
++
++[tool.ruff]
++line-length = 100
++target-version = "py310"
++
++[tool.ruff.lint]
++select = ["E", "F", "I", "UP", "B"]
++
++[tool.mypy]
++python_version = "3.10"
++warn_unused_configs = true
++check_untyped_defs = true
++strict_equality = true
+diff --git a/tests/test_discovery.py b/tests/test_discovery.py
+new file mode 100644
+index 0000000..a0a606b
+--- /dev/null
++++ b/tests/test_discovery.py
+@@ -0,0 +1,22 @@
++from __future__ import annotations
++
++from pathlib import Path
++
++import pytest
++
++from espeakng_runtime import discovery
++from espeakng_runtime.errors import EspeakUnavailableError
++
++
++def test_explicit_executable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
++    executable = tmp_path / "espeak-ng"
++    executable.write_text("", encoding="utf-8")
++    monkeypatch.setenv(discovery.ENV_EXECUTABLE, str(executable))
++    assert discovery.find_executable() == str(executable.resolve())
++
++
++def test_invalid_explicit_data(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
++    missing = tmp_path / "missing"
++    monkeypatch.setenv(discovery.ENV_DATA, str(missing))
++    with pytest.raises(EspeakUnavailableError, match="data directory"):
++        discovery.find_data()
+diff --git a/tests/test_live_espeak.py b/tests/test_live_espeak.py
+new file mode 100644
+index 0000000..0f9ace0
+--- /dev/null
++++ b/tests/test_live_espeak.py
+@@ -0,0 +1,27 @@
++from __future__ import annotations
++
++import pytest
++
++from espeakng_runtime import EspeakRuntime
++from espeakng_runtime.discovery import maybe_find_executable, select_native
++
++
++@pytest.mark.espeak
++def test_cli_smoke() -> None:
++    if maybe_find_executable() is None:
++        pytest.skip("eSpeak CLI not installed")
++    with EspeakRuntime(mode="cli") as runtime:
++        value = runtime.phonemize("hello", voice="en-us")
++        assert value
++        assert runtime.info.implementation == "cli"
++
++
++@pytest.mark.espeak
++def test_native_smoke_if_available() -> None:
++    candidate, _ = select_native()
++    if candidate is None:
++        pytest.skip("eSpeak native library not installed")
++    with EspeakRuntime(mode="native") as runtime:
++        value = runtime.phonemize("hello", voice="en-us")
++        assert value
++        assert runtime.info.implementation == "native"
+diff --git a/tests/test_packaging.py b/tests/test_packaging.py
+new file mode 100644
+index 0000000..9fc31c3
+--- /dev/null
++++ b/tests/test_packaging.py
+@@ -0,0 +1,15 @@
++from __future__ import annotations
++
++from pathlib import Path
++
++import tomllib
++
++
++def test_flat_layout_and_dynamic_version() -> None:
++    root = Path(__file__).parents[1]
++    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
++    assert not (root / "src").exists()
++    assert data["project"]["dynamic"] == ["version"]
++    assert "version" not in data["project"]
++    assert data["tool"]["setuptools_scm"]["write_to"] == "espeakng_runtime/_version.py"
++    assert data["tool"]["setuptools_scm"]["fallback_version"] == "0.1.dev0"
+diff --git a/tests/test_runtime_selection.py b/tests/test_runtime_selection.py
+new file mode 100644
+index 0000000..3b0f721
+--- /dev/null
++++ b/tests/test_runtime_selection.py
+@@ -0,0 +1,36 @@
++from __future__ import annotations
++
++from espeakng_runtime import runtime
++from espeakng_runtime.discovery import LibraryCandidate
++
++
++class DummyNative:
++    def __init__(self, **kwargs: object) -> None:
++        self.kwargs = kwargs
++
++
++class DummyCli:
++    def __init__(self, **kwargs: object) -> None:
++        self.kwargs = kwargs
++
++
++def test_auto_prefers_native(monkeypatch) -> None:
++    monkeypatch.setattr(runtime, "maybe_find_executable", lambda value=None: "/x/espeak-ng")
++    monkeypatch.setattr(
++        runtime,
++        "select_native",
++        lambda **kwargs: (LibraryCandidate("/x/libespeak-ng.so", "test", "/x/data"), ()),
++    )
++    monkeypatch.setattr(runtime, "NativeBackend", DummyNative)
++    instance = runtime.EspeakRuntime()
++    assert isinstance(instance._backend, DummyNative)
++
++
++def test_auto_falls_back_to_cli(monkeypatch) -> None:
++    monkeypatch.setattr(runtime, "maybe_find_executable", lambda value=None: "/x/espeak-ng")
++    monkeypatch.setattr(runtime, "find_executable", lambda value=None: "/x/espeak-ng")
++    monkeypatch.setattr(runtime, "select_native", lambda **kwargs: (None, ()))
++    monkeypatch.setattr(runtime, "CliBackend", DummyCli)
++    instance = runtime.EspeakRuntime(prefer_exact_clauses=True)
++    assert isinstance(instance._backend, DummyCli)
++    assert "exact clause API" in instance._backend.kwargs["fallback_reason"]
+diff --git a/tests/test_text.py b/tests/test_text.py
+new file mode 100644
+index 0000000..bf6d247
+--- /dev/null
++++ b/tests/test_text.py
+@@ -0,0 +1,8 @@
++from espeakng_runtime._text import split_best_effort_clauses
++
++
++def test_split_best_effort_clauses() -> None:
++    assert split_best_effort_clauses("Hello, world!") == [
++        ("Hello", ",", False),
++        (" world", "!", True),
++    ]
