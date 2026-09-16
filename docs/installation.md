@@ -16,6 +16,21 @@ python -m pip install "espeakng-runtime[bundled]"
 
 The bundled extra does not change the package's public API and does not provide model-specific G2P conversion.
 
+### Termux / Android
+
+On Termux, prefer the native Termux eSpeak NG package rather than the
+`bundled` extra. `espeakng-loader` publishes desktop/server Linux
+manylinux builds, not Android/Bionic builds.
+
+```console
+pkg install espeak
+python -m pip install espeakng-runtime
+```
+
+`EspeakRuntime(mode="auto")` or `mode="native"` can then discover the
+Termux-provided shared library. Use `runtime.info` to confirm the selected
+library and source.
+
 ## Development and documentation
 
 ```console

@@ -41,3 +41,34 @@ def test_explicit_executable_near_library_precedes_system(monkeypatch: pytest.Mo
     monkeypatch.setattr(discovery.ctypes.util, "find_library", lambda name: "/system/lib.so")
     candidates = discovery.iter_library_candidates(executable="/custom/bin/espeak-ng")
     assert candidates[0].library == "/custom/libespeak-ng.so"
+
+
+def test_unloadable_loader_falls_back_to_near_executable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loader = "/loader/libespeak-ng.so"
+    near = Path("/termux/lib/libespeak-ng.so")
+
+    monkeypatch.setattr(discovery, "_loader_paths", lambda: (loader, "/loader/data"))
+    monkeypatch.setattr(discovery, "_near_executable_candidates", lambda executable: (near,))
+    monkeypatch.setattr(discovery.ctypes.util, "find_library", lambda name: None)
+
+    class LoadableLibrary:
+        pass
+
+    def fake_cdll(path: str):
+        if path == loader:
+            raise OSError("incompatible shared object")
+        if path == near.as_posix():
+            return LoadableLibrary()
+        raise AssertionError(path)
+
+    monkeypatch.setattr(discovery.ctypes, "CDLL", fake_cdll)
+
+    candidate, probes = discovery.select_native(executable="/termux/bin/espeak-ng")
+
+    assert candidate is not None
+    assert candidate.library == near.as_posix()
+    assert candidate.source == "near-executable"
+    assert [probe.loadable for probe in probes] == [False, True]
+    assert probes[0].source == "espeakng-loader"
