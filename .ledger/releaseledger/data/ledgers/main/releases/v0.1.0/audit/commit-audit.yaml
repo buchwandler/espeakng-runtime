@@ -2,14 +2,14 @@ schema_version: 1
 object_type: commit_audit_sheet
 versioning:
   schema_version: 1
-  revision: 3
+  revision: 6
 release_version: v0.1.0
 git_base_ref: fe88491144f87e7aed8eecc1bcbd87b8dfcd63ab
 git_base_sha: fe88491144f87e7aed8eecc1bcbd87b8dfcd63ab
 git_head_ref: HEAD
-git_head_sha: 87c501426a62cc2c59fd0dfb12b8d15b1343494b
-git_range: fe88491144f87e7aed8eecc1bcbd87b8dfcd63ab..87c501426a62cc2c59fd0dfb12b8d15b1343494b
-commit_count: 3
+git_head_sha: 5e99965dc81d8afacea1d4277cf64d2c4ba0a1ea
+git_range: fe88491144f87e7aed8eecc1bcbd87b8dfcd63ab..5e99965dc81d8afacea1d4277cf64d2c4ba0a1ea
+commit_count: 10
 rows:
   - sha: 4ed12c47d3c3e5e436cdda82a04b0af50091b949
     source_ref: git:4ed12c47d3c3e5e436cdda82a04b0af50091b949
@@ -149,3 +149,304 @@ rows:
     evidence_subject: "chore: ci"
     target_entry_id: entry-0003
     notes: ""
+  - sha: 12d727f697702f19c65db94ff775a0d85cd6de73
+    source_ref: git:12d727f697702f19c65db94ff775a0d85cd6de73
+    short_sha: 12d727f
+    changed_paths:
+      - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/audit/commit-audit.yaml
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/entries/entry-0001.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/entries/entry-0002.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/entries/entry-0003.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/release.md
+      - .ledger/releaseledger/work/v0.1.0/audit-decisions.yaml
+      - .ledger/releaseledger/work/v0.1.0/audit.yaml
+      - .ledger/releaseledger/work/v0.1.0/entries.yaml
+      - .ledger/releaseledger/work/v0.1.0/evidence/4ed12c4.patch
+      - .ledger/releaseledger/work/v0.1.0/evidence/87c5014.patch
+      - .ledger/releaseledger/work/v0.1.0/evidence/b5d8200.patch
+      - .ledger/releaseledger/work/v0.1.0/evidence/manifest.json
+      - .ledger/releaseledger/work/v0.1.0/range.json
+      - .ledger/releaseledger/write.lock
+      - docs/changelog.md
+    stats:
+      files_changed: 16
+      insertions: 3228
+      deletions: 0
+    inspected: true
+    inspected_paths:
+      - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/audit/commit-audit.yaml
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/entries/entry-0001.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/entries/entry-0002.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/entries/entry-0003.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.0/release.md
+      - .ledger/releaseledger/work/v0.1.0/audit-decisions.yaml
+      - .ledger/releaseledger/work/v0.1.0/audit.yaml
+      - .ledger/releaseledger/work/v0.1.0/entries.yaml
+      - .ledger/releaseledger/work/v0.1.0/evidence/4ed12c4.patch
+      - .ledger/releaseledger/work/v0.1.0/evidence/87c5014.patch
+      - .ledger/releaseledger/work/v0.1.0/evidence/b5d8200.patch
+      - .ledger/releaseledger/work/v0.1.0/evidence/manifest.json
+      - .ledger/releaseledger/work/v0.1.0/range.json
+      - .ledger/releaseledger/write.lock
+      - docs/changelog.md
+    observed_behavior:
+      Recorded v0.1.0 release metadata and generated the initial changelog;
+      no runtime behavior changed
+    public_impact: internal
+    decision: internal
+    stale: false
+    evidence_subject: "doc: changelog"
+    target_entry_id: entry-0004
+    notes: Release bookkeeping and generated changelog state only
+  - sha: 7bde0ce5345f4fc9ecf85afccd9e06429166bb78
+    source_ref: git:7bde0ce5345f4fc9ecf85afccd9e06429166bb78
+    short_sha: 7bde0ce
+    changed_paths:
+      - .github/workflows/codecov.yml
+      - .github/workflows/release-checks.yml
+      - MIGRATION.md
+      - README.md
+      - docs/api.md
+      - docs/backends.md
+      - docs/changelog.md
+      - docs/index.md
+      - docs/installation.md
+      - docs/make.py
+      - docs/migration.md
+      - docs/requirements.txt
+      - docs/usage.md
+      - espeakng_runtime/_text.py
+      - espeakng_runtime/backends/native.py
+      - espeakng_runtime/discovery.py
+      - espeakng_runtime/runtime.py
+      - pyproject.toml
+      - scripts/check_release_artifacts.py
+      - tests/test_discovery.py
+      - tests/test_native.py
+      - tests/test_parity.py
+      - tests/test_runtime_selection.py
+      - tests/test_text.py
+    stats:
+      files_changed: 24
+      insertions: 658
+      deletions: 39
+    inspected: true
+    inspected_paths:
+      - .github/workflows/codecov.yml
+      - .github/workflows/release-checks.yml
+      - MIGRATION.md
+      - README.md
+      - docs/api.md
+      - docs/backends.md
+      - docs/changelog.md
+      - docs/index.md
+      - docs/installation.md
+      - docs/make.py
+      - docs/migration.md
+      - docs/requirements.txt
+      - docs/usage.md
+      - espeakng_runtime/_text.py
+      - espeakng_runtime/backends/native.py
+      - espeakng_runtime/discovery.py
+      - espeakng_runtime/runtime.py
+      - pyproject.toml
+      - scripts/check_release_artifacts.py
+      - tests/test_discovery.py
+      - tests/test_native.py
+      - tests/test_parity.py
+      - tests/test_runtime_selection.py
+      - tests/test_text.py
+    observed_behavior:
+      Added exact native clause metadata with independent sentence-boundary
+      decoding, grouped punctuation in best-effort splitting, and documented backend
+      capabilities and lifecycle behavior
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "feat: prepare release"
+    target_entry_id: entry-0005
+    notes: Public runtime and documentation changes
+  - sha: 71ef6e16f4bd211a259353b51d146e23089df2be
+    source_ref: git:71ef6e16f4bd211a259353b51d146e23089df2be
+    short_sha: 71ef6e1
+    changed_paths:
+      - espeakng_runtime/discovery.py
+    stats:
+      files_changed: 1
+      insertions: 1
+      deletions: 1
+    inspected: true
+    inspected_paths:
+      - espeakng_runtime/discovery.py
+    observed_behavior:
+      Normalized near-executable library candidates to POSIX paths
+      for consistent discovery identities
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "feat: posix path"
+    target_entry_id: entry-0006
+    notes: Cross-platform discovery fix
+  - sha: 5b5cec638f98cf82de89759d9743e05d9b3af94d
+    source_ref: git:5b5cec638f98cf82de89759d9743e05d9b3af94d
+    short_sha: 5b5cec6
+    changed_paths:
+      - README.md
+    stats:
+      files_changed: 1
+      insertions: 3
+      deletions: 0
+    inspected: true
+    inspected_paths:
+      - README.md
+    observed_behavior:
+      Added PyPI version, supported Python version, and download badges
+      to the project README
+    public_impact: docs
+    decision: accepted
+    stale: false
+    evidence_subject: "doc: badges"
+    target_entry_id: entry-0007
+    notes: User-facing documentation metadata
+  - sha: 3e60826a2fbff8a056f9308e754f66376bc42dee
+    source_ref: git:3e60826a2fbff8a056f9308e754f66376bc42dee
+    short_sha: 3e60826
+    changed_paths:
+      - docs/installation.md
+      - tests/test_discovery.py
+      - tests/test_parity.py
+    stats:
+      files_changed: 3
+      insertions: 71
+      deletions: 2
+    inspected: true
+    inspected_paths:
+      - docs/installation.md
+      - tests/test_discovery.py
+      - tests/test_parity.py
+    observed_behavior:
+      Added Termux and Android installation guidance and made bundled-library
+      smoke checks tolerate unavailable desktop binaries on Android
+    public_impact: docs
+    decision: accepted
+    stale: false
+    evidence_subject: "fix: pytest fix for termux"
+    target_entry_id: entry-0008
+    notes: Platform-specific installation and verification improvements
+  - sha: bfe71567fd5d39c1f5744c5d23701d05d67d66af
+    source_ref: git:bfe71567fd5d39c1f5744c5d23701d05d67d66af
+    short_sha: bfe7156
+    changed_paths:
+      - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0001.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0002.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0003.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/release.md
+      - MIGRATION.md
+      - README.md
+      - docs/api.md
+      - docs/backends.md
+      - docs/changelog.md
+      - docs/usage.md
+      - espeakng_runtime/__init__.py
+      - espeakng_runtime/backends/cli.py
+      - espeakng_runtime/backends/native.py
+      - espeakng_runtime/discovery.py
+      - espeakng_runtime/runtime.py
+      - espeakng_runtime/types.py
+      - tests/test_cli.py
+      - tests/test_discovery.py
+      - tests/test_inspection.py
+      - tests/test_native.py
+      - tests/test_runtime_selection.py
+    stats:
+      files_changed: 22
+      insertions: 581
+      deletions: 42
+    inspected: true
+    inspected_paths:
+      - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0001.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0002.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0003.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/release.md
+      - MIGRATION.md
+      - README.md
+      - docs/api.md
+      - docs/backends.md
+      - docs/usage.md
+      - espeakng_runtime/__init__.py
+      - espeakng_runtime/backends/cli.py
+      - espeakng_runtime/backends/native.py
+      - espeakng_runtime/discovery.py
+      - espeakng_runtime/runtime.py
+      - espeakng_runtime/types.py
+      - tests/test_cli.py
+      - tests/test_discovery.py
+      - tests/test_inspection.py
+      - tests/test_native.py
+      - tests/test_runtime_selection.py
+    observed_behavior:
+      Added non-initializing eSpeak capability inspection, mandatory-symbol
+      validation, structured fallback diagnostics, and consistent native and CLI data-path
+      handling
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "feat: add missing features"
+    target_entry_id: entry-0009
+    notes: Public runtime API and backend behavior
+  - sha: 5e99965dc81d8afacea1d4277cf64d2c4ba0a1ea
+    source_ref: git:5e99965dc81d8afacea1d4277cf64d2c4ba0a1ea
+    short_sha: 5e99965
+    changed_paths:
+      - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0004.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0005.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0006.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/release.md
+      - MIGRATION.md
+      - README.md
+      - docs/api.md
+      - docs/backends.md
+      - docs/changelog.md
+      - espeakng_runtime/_voices.py
+      - espeakng_runtime/runtime.py
+      - espeakng_runtime/types.py
+      - tests/test_inspection.py
+      - tests/test_lifecycle.py
+      - tests/test_parity.py
+      - tests/test_voice_resolution.py
+    stats:
+      files_changed: 17
+      insertions: 517
+      deletions: 7
+    inspected: true
+    inspected_paths:
+      - .ledger/releaseledger/data/ledgers/main/events/events.jsonl
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0004.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/entries/entry-0005.md
+      - .ledger/releaseledger/data/ledgers/main/releases/v0.1.1/release.md
+      - MIGRATION.md
+      - README.md
+      - docs/api.md
+      - docs/backends.md
+      - espeakng_runtime/_voices.py
+      - espeakng_runtime/runtime.py
+      - espeakng_runtime/types.py
+      - tests/test_inspection.py
+      - tests/test_lifecycle.py
+      - tests/test_parity.py
+      - tests/test_voice_resolution.py
+    observed_behavior:
+      Added deterministic language-style voice resolution with explicit
+      MBROLA selection, runtime finalization on garbage collection, closed-runtime guards,
+      and normalized version components
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "feat: add more missing features"
+    target_entry_id: entry-0012
+    notes: Public runtime API and lifecycle behavior

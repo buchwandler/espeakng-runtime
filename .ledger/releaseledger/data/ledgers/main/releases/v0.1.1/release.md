@@ -3,14 +3,14 @@ schema_version: 2
 object_type: release
 versioning:
   schema_version: 1
-  revision: 7
+  revision: 8
 version: v0.1.1
-status: planned
+status: canceled
 history_state: curated
 title: Release v0.1.1
 released_at: null
 previous_version: v0.1.0
-cancel_reason: null
+cancel_reason: Incorrectly created; changes belong to v0.1.0
 superseded_by: null
 changelog_file: null
 boundary_ref: null
