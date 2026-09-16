@@ -1,0 +1,48 @@
+name: CodeCov
+
+on: push
+
+env:
+  KOKOROG2P_EXTERNAL_LEXPHON_DATA: "1"
+  LEXPHON_DATA_HOME: ${{ runner.temp }}/lexphon-data
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install eSpeak-ng
+        run: |
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y espeak-ng
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[all,dev]"
+          python -m pip check
+
+      - name: Run full pytest coverage
+        run: >-
+          python -m pytest
+          --cov=espeagng_runtime
+          --cov-report=xml
+          --junitxml=junit.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
