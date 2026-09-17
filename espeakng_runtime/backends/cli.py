@@ -6,7 +6,7 @@ import re
 import subprocess
 from collections.abc import Sequence
 
-from .._text import split_best_effort_clauses
+from .._text import normalize_phoneme_output, split_best_effort_clauses
 from ..discovery import data_parent_for_espeak
 from ..errors import CapabilityError, PhonemizationError
 from ..types import Clause, FallbackCode, RuntimeInfo, Voice
@@ -122,7 +122,7 @@ class CliBackend:
             ),
             input_text=text if text.endswith("\n") else f"{text}\n",
         )
-        return re.sub(r"\s+", " ", process.stdout.strip())
+        return normalize_phoneme_output(process.stdout)
 
     def phonemize_many(
         self,
@@ -137,8 +137,6 @@ class CliBackend:
         nonempty = [text for text in values if text and text.strip()]
         if not nonempty:
             return [""] * len(values)
-        if any("\n" in text or "\r" in text for text in nonempty):
-            raise ValueError("phonemize_many inputs must not contain line breaks")
         process = self._run(
             self._phoneme_args(
                 voice=voice,
@@ -159,7 +157,7 @@ class CliBackend:
             if not text or not text.strip():
                 result.append("")
             else:
-                result.append(re.sub(r"\s+", " ", next(iterator).strip()))
+                result.append(normalize_phoneme_output(next(iterator)))
         return result
 
     def clauses(self, text: str, *, voice: str, exact: bool = False) -> list[Clause]:

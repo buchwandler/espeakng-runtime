@@ -88,3 +88,93 @@ def test_bundled_loader_smoke() -> None:
         assert runtime.info.library is not None
         assert Path(runtime.info.library).resolve() == library.resolve()
         assert runtime.phonemize("hello", voice="en-us")
+        assert runtime.phonemize("hello", voice="en-us")
+
+
+# --- Regional locale parity matrix ---
+
+VOICE_PARITY_CASES = (
+    ("de-de", "Haus"),
+    ("en-us", "hello"),
+    ("en-gb", "hello"),
+    ("fr-fr", "bonjour"),
+    ("sv-se", "hej"),
+    ("pt-br", "olá"),
+)
+
+
+@pytest.mark.espeak
+@pytest.mark.parametrize(("selector", "text"), VOICE_PARITY_CASES)
+def test_regional_locale_parity(selector: str, text: str) -> None:
+    """Regional locale selectors produce identical output on native and CLI."""
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
+        try:
+            native_value = native_runtime.phonemize(text, voice=selector)
+        except VoiceNotFoundError:
+            pytest.skip(f"native does not support {selector}")
+        try:
+            cli_value = cli_runtime.phonemize(text, voice=selector)
+        except Exception:
+            pytest.skip(f"CLI does not support {selector}")
+        assert native_value == cli_value, f"{selector}: native={native_value!r} cli={cli_value!r}"
+
+
+@pytest.mark.espeak
+@pytest.mark.parametrize(("selector", "text"), VOICE_PARITY_CASES)
+def test_regional_locale_custom_zwj_tie_parity(selector: str, text: str) -> None:
+    """Regional locale selectors with U+200D tie produce identical output."""
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    kwargs = {"use_tie": True, "tie_char": "\u200d"}
+    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
+        try:
+            native_value = native_runtime.phonemize(text, voice=selector, **kwargs)
+        except VoiceNotFoundError:
+            pytest.skip(f"native does not support {selector}")
+        try:
+            cli_value = cli_runtime.phonemize(text, voice=selector, **kwargs)
+        except Exception:
+            pytest.skip(f"CLI does not support {selector}")
+        msg = f"{selector} zwj: native={native_value!r} cli={cli_value!r}"
+        assert native_value == cli_value, msg
+
+
+@pytest.mark.espeak
+def test_batch_parity_with_regional_selector() -> None:
+    """Batch phonemization with regional selectors produces identical output."""
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    texts = ["Haus", "Deutsch", "", "hello"]
+    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
+        try:
+            native_batch = native_runtime.phonemize_many(texts, voice="de-de")
+        except VoiceNotFoundError:
+            pytest.skip("native does not support de-de")
+        try:
+            cli_batch = cli_runtime.phonemize_many(texts, voice="de-de")
+        except Exception:
+            pytest.skip("CLI does not support de-de")
+        assert len(native_batch) == len(cli_batch) == len(texts)
+        assert native_batch[2] == cli_batch[2] == ""
+        assert native_batch == cli_batch
+
+
+@pytest.mark.espeak
+def test_auto_mode_parity_with_regional_selector() -> None:
+    """mode='auto' produces the same result as CLI for regional selectors."""
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    with EspeakRuntime(mode="auto") as auto_runtime, EspeakRuntime(mode="cli") as cli_runtime:
+        for selector, text in (("de-de", "Haus"), ("fr-fr", "bonjour")):
+            try:
+                auto_value = auto_runtime.phonemize(text, voice=selector)
+            except VoiceNotFoundError:
+                continue
+            try:
+                cli_value = cli_runtime.phonemize(text, voice=selector)
+            except Exception:
+                continue
+            msg = f"{selector} auto: auto={auto_value!r} cli={cli_value!r}"
+            assert auto_value == cli_value, msg

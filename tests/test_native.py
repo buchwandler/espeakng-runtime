@@ -30,15 +30,20 @@ class FakeNativeLibrary:
         exact: bool = True,
         init_result: int = 0,
         voice_result: int = 0,
+        voice_by_properties_result: int | None = 0,
         no_progress: bool = False,
     ) -> None:
         self.init_result = init_result
         self.voice_result = voice_result
+        self.voice_by_properties_result = voice_by_properties_result
         self.no_progress = no_progress
         self.terminate_calls = 0
         self.initialize_calls = 0
         self.voices_calls = 0
         self.last_voice: bytes | None = None
+        self.last_voice_properties_language: bytes | None = None
+        self.set_voice_by_name_calls = 0
+        self.set_voice_by_properties_calls = 0
         self._clause_index = 0
 
         self.espeak_Initialize = FakeFunction(self._initialize)
@@ -47,17 +52,24 @@ class FakeNativeLibrary:
         self.espeak_Info = FakeFunction(self._info)
         self.espeak_TextToPhonemes = FakeFunction(self._phonemes)
         self.espeak_ListVoices = FakeFunction(self._list_voices)
+        if voice_by_properties_result is not None:
+            self.espeak_SetVoiceByProperties = FakeFunction(self._set_voice_by_properties)
         if exact:
             self.espeak_TextToPhonemesWithTerminator = FakeFunction(self._exact_clauses)
-
     def _initialize(self, *_args: object) -> int:
         self.initialize_calls += 1
         return self.init_result
 
     def _set_voice(self, voice: bytes) -> int:
         self.last_voice = voice
+        self.set_voice_by_name_calls += 1
         return self.voice_result
 
+    def _set_voice_by_properties(self, spec_ptr: ctypes.c_void_p) -> int:
+        spec = ctypes.cast(spec_ptr, ctypes.POINTER(native._VoiceStruct)).contents
+        self.last_voice_properties_language = spec.languages
+        self.set_voice_by_properties_calls += 1
+        return self.voice_by_properties_result
     def _terminate(self) -> int:
         self.terminate_calls += 1
         return 0
@@ -195,11 +207,11 @@ def test_native_initialization_failure(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_voice_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    backend = make_backend(monkeypatch, FakeNativeLibrary(voice_result=1))
+    library = FakeNativeLibrary(voice_result=1, voice_by_properties_result=None)
+    backend = make_backend(monkeypatch, library)
     with pytest.raises(VoiceNotFoundError):
         backend.phonemize("hello", voice="missing")
     backend.close()
-
 
 def test_no_progress_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     backend = make_backend(monkeypatch, FakeNativeLibrary(no_progress=True))
@@ -271,3 +283,67 @@ def test_manager_rejects_conflicting_library_and_data(monkeypatch: pytest.Monkey
 
     with pytest.raises(EspeakConflictError, match="shared library"):
         make_backend(monkeypatch, FakeNativeLibrary(), "/fake/two.so")
+        make_backend(monkeypatch, FakeNativeLibrary(), "/fake/two.so")
+
+
+def test_explicit_name_succeeds_skips_properties(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SetVoiceByName succeeds -> SetVoiceByProperties must not be called."""
+    library = FakeNativeLibrary(voice_result=0)
+    backend = make_backend(monkeypatch, library)
+    backend.phonemize("hello", voice="en-us")
+    assert library.set_voice_by_name_calls == 1
+    assert library.set_voice_by_properties_calls == 0
+    backend.close()
+
+
+def test_name_fails_property_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SetVoiceByName fails -> SetVoiceByProperties(languages=selector) succeeds."""
+    library = FakeNativeLibrary(voice_result=1, voice_by_properties_result=0)
+    backend = make_backend(monkeypatch, library)
+    result = backend.phonemize("hello", voice="de-de")
+    assert result  # phonemization succeeded
+    assert library.set_voice_by_name_calls == 1
+    assert library.set_voice_by_properties_calls == 1
+    assert library.last_voice_properties_language == b"de-de"
+    backend.close()
+
+
+def test_both_name_and_property_fail(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both lookups fail -> VoiceNotFoundError with selector in diagnostic."""
+    library = FakeNativeLibrary(voice_result=1, voice_by_properties_result=1)
+    backend = make_backend(monkeypatch, library)
+    with pytest.raises(VoiceNotFoundError, match="xx-yy") as exc_info:
+        backend.phonemize("hello", voice="xx-yy")
+    assert "name lookup code 1" in str(exc_info.value)
+    assert "language lookup code 1" in str(exc_info.value)
+    backend.close()
+
+
+def test_properties_api_absent_name_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Older library without SetVoiceByProperties: failed name raises VoiceNotFoundError."""
+    library = FakeNativeLibrary(voice_result=1, voice_by_properties_result=None)
+    backend = make_backend(monkeypatch, library)
+    with pytest.raises(VoiceNotFoundError, match="xx-yy") as exc_info:
+        backend.phonemize("hello", voice="xx-yy")
+    assert "language-property lookup unavailable" in str(exc_info.value)
+    backend.close()
+
+
+def test_properties_api_absent_name_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Older library without SetVoiceByProperties: successful name still works."""
+    library = FakeNativeLibrary(voice_result=0, voice_by_properties_result=None)
+    backend = make_backend(monkeypatch, library)
+    result = backend.phonemize("hello", voice="en-us")
+    assert result
+    assert library.set_voice_by_name_calls == 1
+    backend.close()
+
+
+def test_voice_selection_stays_inside_manager_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Repeated phonemize calls verify voice selection is inside the lock."""
+    library = FakeNativeLibrary(voice_result=0)
+    backend = make_backend(monkeypatch, library)
+    for _ in range(5):
+        backend.phonemize("hello", voice="en-us")
+    assert library.set_voice_by_name_calls == 5
+    backend.close()

@@ -72,6 +72,7 @@ library and falls back to the command-line executable.
 
 Voice arguments are caller-facing requests, not necessarily native identifiers. The runtime enumerates the active inventory and resolves language requests such as `en-gb` to the concrete identifier accepted by the installed eSpeak version. Resolution is cached per runtime instance, and ordinary language requests never select MBROLA voices implicitly. Use an explicit `mb/...` or `mb-...` request, or `resolve_voice(..., allow_mbrola=True)`, when MBROLA selection is intended.
 
+The `voice` argument is a public eSpeak voice/language selector. Native mode first attempts an explicit voice-name lookup and, when that fails and the native API supports it, retries the selector as a language property. This allows common locale selectors such as `de-de`, `en-gb`, and `fr-fr` to behave consistently with the CLI backend.
 `RuntimeInfo.version_tuple` exposes the numeric components of the reported eSpeak version, for example `(1, 48, 15)`. Runtime cleanup is deterministic with `close()` or a context manager. Closing releases the Python runtime ownership; because eSpeak native state is process-global and older releases may be unsafe to terminate/reinitialize repeatedly, the initialized library remains resident for the Python process lifetime. Subsequent compatible runtimes reuse it, while conflicting library or data paths are rejected. Abandoned runtimes release their Python ownership during garbage-collection finalization.
 For Piper-style exact clause handling, request an exact-capable runtime:
 

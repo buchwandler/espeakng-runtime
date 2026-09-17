@@ -3,8 +3,32 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 _CLAUSE_RE = re.compile(r"(.*?)([.!?]+|[,;:]+|$)", re.DOTALL)
+
+
+def normalize_phoneme_output(value: str) -> str:
+    """Normalize whitespace in backend phoneme output.
+
+    Strips leading/trailing whitespace and collapses internal runs of
+    whitespace into single spaces.  IPA symbols, Unicode combining marks,
+    tie characters, stress markers, and punctuation are left untouched.
+    """
+    return re.sub(r"\s+", " ", value.strip())
+
+
+def _validate_batch_texts(texts: Sequence[str]) -> list[str]:
+    """Validate batch inputs and return a concrete list.
+
+    Every non-empty element must not contain embedded line breaks.
+    This contract is backend-independent so that ``mode='auto'`` yields
+    the same input validity regardless of which backend is selected.
+    """
+    values = list(texts)
+    if any("\n" in text or "\r" in text for text in values if text and text.strip()):
+        raise ValueError("phonemize_many inputs must not contain line breaks")
+    return values
 
 
 def split_best_effort_clauses(text: str) -> list[tuple[str, str | None, bool]]:

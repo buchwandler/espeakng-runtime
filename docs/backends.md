@@ -16,7 +16,26 @@ Diagnostic source labels such as `espeakng-loader`, `near-executable`, `system-e
 
 The native backend uses `ctypes`. eSpeak's selected voice and other state are process-global, so native calls share a process-wide lock and native manager. Closing a runtime releases its Python ownership; the initialized native library remains resident for the process lifetime rather than being terminated and reinitialized repeatedly. Compatible runtimes reuse it, and conflicting library or data paths are rejected.
 
-## Voice resolution
+### Voice selector resolution
+
+The native backend resolves voice selectors using a two-step strategy:
+
+1. **Name lookup**: `espeak_SetVoiceByName(selector)` — succeeds for explicit eSpeak voice names and identifiers.
+2. **Language property fallback**: when name lookup fails and the native library exposes `espeak_SetVoiceByProperties`, the backend retries using `espeak_SetVoiceByProperties(languages=selector)`.
+
+This is a compatibility strategy, not a BCP-47 implementation in Python. It allows common locale-style selectors such as `de-de`, `en-gb`, `fr-fr`, `sv-se`, and `pt-br` to work natively without consumers maintaining their own alias tables.
+
+```text
+CLI:
+    eSpeak -v<selector>
+
+Native:
+    SetVoiceByName(selector)
+    -> if not found:
+       SetVoiceByProperties(languages=selector)
+```
+
+Older eSpeak libraries that lack `espeak_SetVoiceByProperties` fall back to name-only lookup. Both failures raise `VoiceNotFoundError` with diagnostic codes for each attempt.
 
 `EspeakRuntime` resolves each `voice=` request against the active voice inventory and passes the selected concrete identifier to either backend. Matching prefers exact language, identifier, identifier basename, and then base language, in that order, while preserving inventory order for ties. Identifiers are compared case-insensitively with underscores and Windows separators normalized.
 

@@ -22,9 +22,11 @@ raw = self._espeak.phonemize(
 )
 # existing kokorog2p from_espeak/raw-vocabulary handling follows here
 ```
+`voice=` accepts language-style requests as well as concrete identifiers. The runtime resolves these requests against the active inventory, so a request such as `en-gb` can select the installed native identifier `en`. Common locale selectors such as `de-de`, `en-gb`, `fr-fr`, `sv-se`, and `pt-br` work consistently across native and CLI backends. The native backend first attempts voice-name lookup and, when that fails, retries as a language property via `espeak_SetVoiceByProperties`. Consumers do not need to maintain their own language alias tables.
 
-`voice=` accepts language-style requests as well as concrete identifiers. The runtime resolves these requests against the active inventory, so a request such as `en-gb` can select the installed native identifier `en`. Normal requests do not select MBROLA implicitly. Call `resolve_voice(request, allow_mbrola=True)` or use an explicit `mb/...` or `mb-...` request when MBROLA is intended. `RuntimeInfo.version_tuple` provides normalized numeric version components.
+Normal requests do not select MBROLA implicitly. Call `resolve_voice(request, allow_mbrola=True)` or use an explicit `mb/...` or `mb-...` request when MBROLA is intended. `RuntimeInfo.version_tuple` provides normalized numeric version components.
 
+Downstream projects can safely use `EspeakRuntime(mode="auto")` without maintaining backend-specific language aliases. Consumers must still own their output policy — for example, U+200D tie selection remains a consumer choice.
 The runtime owns Python-side backend cleanup. Prefer the context manager or call `close()` explicitly; an unclosed runtime is also protected by garbage-collection finalization. Closing a runtime releases its Python ownership, but the initialized native eSpeak library remains resident for the process lifetime because native state is process-global and older releases may be unsafe to terminate/reinitialize repeatedly. Subsequent compatible runtimes reuse it, and conflicting native library or data paths in the same process are rejected.
 
 ## PiperG2P

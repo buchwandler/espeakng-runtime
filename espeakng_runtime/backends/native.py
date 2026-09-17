@@ -7,7 +7,7 @@ import threading
 from collections.abc import Sequence
 from pathlib import Path
 
-from .._text import split_best_effort_clauses
+from .._text import normalize_phoneme_output, split_best_effort_clauses
 from ..discovery import data_parent_for_espeak
 from ..errors import (
     CapabilityError,
@@ -174,7 +174,9 @@ class _NativeManager:
         if hasattr(library, "espeak_ListVoices"):
             library.espeak_ListVoices.argtypes = [ctypes.POINTER(_VoiceStruct)]
             library.espeak_ListVoices.restype = ctypes.POINTER(ctypes.POINTER(_VoiceStruct))
-
+        if hasattr(library, "espeak_SetVoiceByProperties"):
+            library.espeak_SetVoiceByProperties.argtypes = [ctypes.POINTER(_VoiceStruct)]
+            library.espeak_SetVoiceByProperties.restype = ctypes.c_int
     def release(self) -> None:
         with self.lock:
             self.users = max(0, self.users - 1)
@@ -232,10 +234,27 @@ class NativeBackend:
             raise PhonemizationError("native eSpeak backend is closed")
 
     def _set_voice(self, voice: str) -> None:
-        result = self._library.espeak_SetVoiceByName(voice.encode("utf-8"))
-        if result != 0:
-            raise VoiceNotFoundError(f"eSpeak voice {voice!r} was not found (code {result})")
+        encoded = voice.encode("utf-8")
 
+        name_code = self._library.espeak_SetVoiceByName(encoded)
+        if name_code == 0:
+            return
+
+        if hasattr(self._library, "espeak_SetVoiceByProperties"):
+            spec = _VoiceStruct()
+            spec.languages = encoded
+            prop_code = self._library.espeak_SetVoiceByProperties(ctypes.byref(spec))
+            if prop_code == 0:
+                return
+            raise VoiceNotFoundError(
+                f"eSpeak voice/language selector {voice!r} was not found"
+                f" (name lookup code {name_code}, language lookup code {prop_code})"
+            )
+
+        raise VoiceNotFoundError(
+            f"eSpeak voice/language selector {voice!r} was not found"
+            f" (name lookup code {name_code}; language-property lookup unavailable)"
+        )
     @staticmethod
     def _phoneme_mode(
         separator: str | None,
@@ -275,7 +294,8 @@ class NativeBackend:
                 raise PhonemizationError("espeak_TextToPhonemes made no progress")
             if value:
                 chunks.append(_decode(value))
-        return " ".join(chunk.strip() for chunk in chunks if chunk.strip()).strip()
+        joined = " ".join(chunk.strip() for chunk in chunks if chunk.strip())
+        return normalize_phoneme_output(joined)
 
     def phonemize(
         self,

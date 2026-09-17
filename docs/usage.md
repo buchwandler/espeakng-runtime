@@ -11,6 +11,16 @@ with EspeakRuntime() as runtime:
 
 The default `auto` mode prefers a usable native library and falls back to the CLI executable. Select a backend explicitly with `mode="native"` or `mode="cli"`.
 
+## Regional locale selectors
+
+Common locale-style selectors work across both backends:
+
+```python
+with EspeakRuntime(mode="auto") as runtime:
+    runtime.phonemize("Haus", voice="de-de")
+    runtime.phonemize("bonjour", voice="fr-fr")
+    runtime.phonemize("hej", voice="sv-se")
+```
 ## Options and batches
 
 ```python
@@ -18,6 +28,12 @@ with EspeakRuntime(mode="auto") as runtime:
     runtime.phonemize("Hello", voice="en-us", separator="_")
     runtime.phonemize("joined", voice="en-us", use_tie=True)
     runtime.phonemize_many(["One", "Two"], voice="en-us")
+    runtime.phonemize(
+        "Haus",
+        voice="de-de",
+        use_tie=True,
+        tie_char="\u200d",
+    )
 ```
 
 `list_voices()` returns available `Voice` records. `runtime.info` returns a `RuntimeInfo` record describing discovery, implementation, version, parity, and capabilities.

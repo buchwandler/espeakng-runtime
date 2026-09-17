@@ -6,6 +6,7 @@ import weakref
 from collections.abc import Sequence
 from typing import Literal
 
+from ._text import _validate_batch_texts
 from ._voices import choose_voice, normalize_voice_code
 from .backends.base import EspeakBackend
 from .backends.cli import CliBackend
@@ -217,9 +218,10 @@ class EspeakRuntime:
         tie_char: str = "͡",
     ) -> list[str]:
         self._ensure_open()
+        validated = _validate_batch_texts(texts)
         resolved = self.resolve_voice(voice)
         return self._backend.phonemize_many(
-            texts,
+            validated,
             voice=resolved.identifier,
             separator=separator,
             use_tie=use_tie,
