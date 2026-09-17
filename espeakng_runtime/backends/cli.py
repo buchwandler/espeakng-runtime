@@ -163,14 +163,16 @@ class CliBackend:
     def clauses(self, text: str, *, voice: str, exact: bool = False) -> list[Clause]:
         if exact:
             raise CapabilityError("CLI eSpeak does not expose exact clause terminator codes")
+        parts = list(split_best_effort_clauses(text))
+        if not parts:
+            return []
+        phonemes = self.phonemize_many(
+            [body for body, _, _ in parts],
+            voice=voice,
+        )
         return [
-            Clause(
-                phonemes=self.phonemize(body, voice=voice),
-                terminator=terminator,
-                terminator_code=None,
-                sentence_end=sentence_end,
-            )
-            for body, terminator, sentence_end in split_best_effort_clauses(text)
+            Clause(value, terminator, None, sentence_end)
+            for value, (_, terminator, sentence_end) in zip(phonemes, parts, strict=True)
         ]
 
     def list_voices(self, filter_name: str | None = None) -> list[Voice]:

@@ -273,18 +273,15 @@ class NativeBackend:
             mode |= ord(separator[0]) << 8
         return mode
 
-    def _phonemize_locked(
+    def _phonemize_body_locked(
         self,
         text: str,
         *,
-        voice: str,
         separator: str | None,
         use_tie: bool,
         tie_char: str,
     ) -> str:
-        if not text or not text.strip():
-            return ""
-        self._set_voice(voice)
+        """Phonemize text assuming voice is already set."""
         buffer = ctypes.create_string_buffer(text.encode("utf-8") + b"\0")
         pointer = ctypes.c_void_p(ctypes.addressof(buffer))
         mode = self._phoneme_mode(separator, use_tie, tie_char)
@@ -297,6 +294,23 @@ class NativeBackend:
             if value:
                 chunks.append(_decode(value))
         joined = " ".join(chunk.strip() for chunk in chunks if chunk.strip())
+        return normalize_phoneme_output(joined)
+
+    def _phonemize_locked(
+        self,
+        text: str,
+        *,
+        voice: str,
+        separator: str | None,
+        use_tie: bool,
+        tie_char: str,
+    ) -> str:
+        if not text or not text.strip():
+            return ""
+        self._set_voice(voice)
+        joined = self._phonemize_body_locked(
+            text, separator=separator, use_tie=use_tie, tie_char=tie_char
+        )
         return normalize_phoneme_output(joined)
 
     def phonemize(
@@ -325,19 +339,25 @@ class NativeBackend:
         voice: str,
         separator: str | None = None,
         use_tie: bool = False,
-        tie_char: str = "͡",
+        tie_char: str = "\u0361",
     ) -> list[str]:
         self._ensure_open()
+        values = list(texts)
+        has_nonempty = any(text and text.strip() for text in values)
+        if not has_nonempty:
+            return [""] * len(values)
         with _MANAGER.lock:
+            self._set_voice(voice)
             return [
-                self._phonemize_locked(
+                self._phonemize_body_locked(
                     text,
-                    voice=voice,
                     separator=separator,
                     use_tie=use_tie,
                     tie_char=tie_char,
                 )
-                for text in texts
+                if text and text.strip()
+                else ""
+                for text in values
             ]
 
     def _exact_clauses_locked(self, text: str, voice: str) -> list[Clause]:

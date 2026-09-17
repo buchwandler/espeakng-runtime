@@ -87,7 +87,7 @@ class EspeakRuntime:
         self._backend: EspeakBackend
         self._voice_inventory: tuple[Voice, ...] | None = None
         self._resolved_voices: dict[tuple[str, bool], Voice] = {}
-
+        self._native_probes: tuple[LibraryProbe, ...] = ()
         if mode == "cli":
             cli_executable = find_executable(executable)
             self._backend = CliBackend(
@@ -106,6 +106,7 @@ class EspeakRuntime:
             data=data,
             require_exact_clauses=prefer_exact_clauses,
         )
+        self._native_probes = probes
         native_init_error: EspeakUnavailableError | None = None
         if candidate is not None:
             try:
@@ -163,6 +164,16 @@ class EspeakRuntime:
     def info(self) -> RuntimeInfo:
         self._ensure_open()
         return self._backend.info
+
+    @property
+    def native_probes(self) -> tuple[LibraryProbe, ...]:
+        """Probes from native library selection during construction.
+
+        Returns an empty tuple for CLI mode. Does not perform additional
+        discovery when read.
+        """
+        self._ensure_open()
+        return self._native_probes
 
     def resolve_voice(
         self,

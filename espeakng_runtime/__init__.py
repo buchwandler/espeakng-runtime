@@ -11,7 +11,7 @@ from .errors import (
     PhonemizationError,
     VoiceNotFoundError,
 )
-from .runtime import EspeakRuntime
+from .runtime import EspeakRuntime, Mode
 from .types import Clause, FallbackCode, RuntimeInfo, Voice
 
 try:
@@ -31,6 +31,7 @@ __all__ = [
     "EspeakError",
     "EspeakRuntime",
     "EspeakUnavailableError",
+    "Mode",
     "PhonemizationError",
     "RuntimeInfo",
     "Voice",
