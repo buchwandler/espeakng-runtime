@@ -4,11 +4,12 @@ on: push
 
 env:
   KOKOROG2P_EXTERNAL_LEXPHON_DATA: "1"
-  LEXPHON_DATA_HOME: ${{ runner.temp }}/lexphon-data
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    env:
+      LEXPHON_DATA_HOME: ${{ runner.temp }}/lexphon-data
     steps:
       - uses: actions/checkout@v4
 
