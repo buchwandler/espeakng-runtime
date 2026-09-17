@@ -1,0 +1,89 @@
+schema: releaseledger.entry-batch.v1
+operation: create
+schema_version: 1
+object_type: release_entry_batch
+release_version: v0.1.4
+git_base_ref: v0.1.3
+git_base_sha: 814f27fec6ef08ed0d0548b6c9627eac34524221
+git_head_ref: HEAD
+git_head_sha: f08eed3c9500f156c4ea564fb8ece8cde17977a2
+include_merges: nontrivial
+entries:
+  - kind: added
+    summary: Added native phoneme trace API path for CLI-equivalent IPA output
+    status: accepted
+    source_refs:
+      - git:f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    paths:
+      - espeakng_runtime/backends/native.py
+    sources:
+      - git:f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: added
+    summary: Added phoneme_output_api and phoneme_parity fields on RuntimeInfo for backend diagnostics
+    status: accepted
+    source_refs: []
+    paths:
+      - espeakng_runtime/types.py
+      - espeakng_runtime/backends/cli.py
+      - espeakng_runtime/backends/native.py
+    sources:
+      - git:f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: added
+    summary: Added native library discovery probes for phoneme trace symbols
+    status: accepted
+    source_refs: []
+    paths:
+      - espeakng_runtime/discovery.py
+    sources:
+      - git:f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: quality
+    summary: Improved phoneme parity tests for weak words, contractions, and phrase context
+    status: accepted
+    source_refs: []
+    paths:
+      - tests/_phoneme_parity.py
+      - tests/data/en_phoneme_parity.txt
+      - tests/test_native.py
+      - tests/test_parity.py
+    sources:
+      - git:f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: added
+    summary: Added backend parity checking development tool
+    status: accepted
+    source_refs: []
+    paths:
+      - tools/check_backend_parity.py
+    sources:
+      - git:f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"
+  - kind: docs
+    summary: Documented native trace and native translation phoneme output paths
+    status: accepted
+    source_refs: []
+    paths:
+      - docs/backends.md
+    sources:
+      - git:f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    prs: []
+    issues: []
+    contributors:
+      - "@holgern"

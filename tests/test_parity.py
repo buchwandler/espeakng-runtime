@@ -257,7 +257,7 @@ def test_batch_parity_weak_words() -> None:
         cli_batch = cli_runtime.phonemize_many(values, **kwargs)
         assert len(native_batch) == len(cli_batch) == len(values)
         assert native_batch[3] == cli_batch[3] == ""
-        for i, (native_val, cli_val) in enumerate(zip(native_batch, cli_batch)):
+        for i, (native_val, cli_val) in enumerate(zip(native_batch, cli_batch, strict=True)):
             if values[i] and values[i].strip():
                 from tests._phoneme_parity import assert_phoneme_parity
 

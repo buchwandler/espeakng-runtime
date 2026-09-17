@@ -1,0 +1,61 @@
+schema_version: 1
+object_type: commit_audit_sheet
+versioning:
+  schema_version: 1
+  revision: 3
+release_version: v0.1.4
+git_base_ref: v0.1.3
+git_base_sha: 8cae6e80e666765e263ae5adb11244e8a7b80f16
+git_head_ref: HEAD
+git_head_sha: f08eed3c9500f156c4ea564fb8ece8cde17977a2
+git_range: 8cae6e80e666765e263ae5adb11244e8a7b80f16..f08eed3c9500f156c4ea564fb8ece8cde17977a2
+commit_count: 1
+rows:
+  - sha: f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    source_ref: git:f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    short_sha: f08eed3
+    changed_paths:
+      - docs/backends.md
+      - espeakng_runtime/backends/cli.py
+      - espeakng_runtime/backends/native.py
+      - espeakng_runtime/discovery.py
+      - espeakng_runtime/types.py
+      - pyproject.toml
+      - tests/__init__.py
+      - tests/_phoneme_parity.py
+      - tests/data/en_phoneme_parity.txt
+      - tests/test_native.py
+      - tests/test_parity.py
+      - tools/check_backend_parity.py
+    stats:
+      files_changed: 12
+      insertions: 732
+      deletions: 4
+    inspected: true
+    inspected_paths:
+      - docs/backends.md
+      - espeakng_runtime/backends/cli.py
+      - espeakng_runtime/backends/native.py
+      - espeakng_runtime/discovery.py
+      - espeakng_runtime/types.py
+      - pyproject.toml
+      - tests/__init__.py
+      - tests/_phoneme_parity.py
+      - tests/data/en_phoneme_parity.txt
+      - tests/test_native.py
+      - tests/test_parity.py
+      - tools/check_backend_parity.py
+    observed_behavior:
+      "Adds a native phoneme trace API path using espeak_SetPhonemeCallback,
+      espeak_Synth, and espeak_Synchronize for CLI-equivalent phoneme output. Introduces
+      phoneme_output_api and phoneme_parity fields on RuntimeInfo. Adds discovery probes
+      for trace symbols. Includes comprehensive parity tests for weak words and contractions,
+      and a backend parity checking tool.
+
+      "
+    public_impact: public
+    decision: accepted
+    stale: false
+    evidence_subject: "feat: better native phoneme support"
+    target_entry_id: entry-0001
+    notes: ""

@@ -197,11 +197,11 @@ class _NativeManager:
         if hasattr(library, "espeak_Synth"):
             library.espeak_Synth.argtypes = [
                 ctypes.c_char_p,  # text
-                ctypes.c_uint,    # size
-                ctypes.c_uint,    # position
-                ctypes.c_int,     # position_type
-                ctypes.c_uint,    # end_position
-                ctypes.c_uint,    # flags
+                ctypes.c_uint,  # size
+                ctypes.c_uint,  # position
+                ctypes.c_int,  # position_type
+                ctypes.c_uint,  # end_position
+                ctypes.c_uint,  # flags
                 ctypes.POINTER(ctypes.c_uint),  # unique_identifier
                 ctypes.c_void_p,  # user_data
             ]
@@ -372,12 +372,12 @@ class NativeBackend:
         result = self._library.espeak_Synth(
             encoded,
             len(encoded),  # size
-            0,             # position
-            0,             # position_type
-            0,             # end_position
-            0x20,          # espeakCHARS_UTF8
+            0,  # position
+            0,  # position_type
+            0,  # end_position
+            0x20,  # espeakCHARS_UTF8
             ctypes.byref(synth_id),
-            None,          # user_data
+            None,  # user_data
         )
         if result != 0:  # EE_OK = 0
             raise PhonemizationError(f"espeak_Synth failed with code {result}")
@@ -412,6 +412,7 @@ class NativeBackend:
         return self._translate_phonemes_locked(
             text, separator=separator, use_tie=use_tie, tie_char=tie_char
         )
+
     def _phonemize_locked(
         self,
         text: str,

@@ -1,0 +1,28 @@
+rows:
+  - sha: f08eed3c9500f156c4ea564fb8ece8cde17977a2
+    inspected: true
+    inspected_paths:
+      - docs/backends.md
+      - espeakng_runtime/backends/cli.py
+      - espeakng_runtime/backends/native.py
+      - espeakng_runtime/discovery.py
+      - espeakng_runtime/types.py
+      - pyproject.toml
+      - tests/__init__.py
+      - tests/_phoneme_parity.py
+      - tests/data/en_phoneme_parity.txt
+      - tests/test_native.py
+      - tests/test_parity.py
+      - tools/check_backend_parity.py
+    observed_behavior: >
+      Adds a native phoneme trace API path using espeak_SetPhonemeCallback,
+      espeak_Synth, and espeak_Synchronize for CLI-equivalent phoneme output.
+      Introduces phoneme_output_api and phoneme_parity fields on RuntimeInfo.
+      Adds discovery probes for trace symbols. Includes comprehensive parity
+      tests for weak words and contractions, and a backend parity checking tool.
+    public_impact: public
+    decision: accepted
+    target_entry_key: null
+    target_entry_id: null
+    notes: ""
+    stale: false

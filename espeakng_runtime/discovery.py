@@ -44,6 +44,7 @@ class LibraryProbe:
 
     missing_symbols: tuple[str, ...] = ()
 
+
 @dataclass(frozen=True, slots=True)
 class EspeakInspection:
     """Non-initializing eSpeak capability and candidate inspection."""
@@ -80,6 +81,7 @@ class EspeakInspection:
                 for probe in self.candidates
             )
         )
+
 
 _REQUIRED_NATIVE_SYMBOLS = (
     "espeak_Initialize",

@@ -1,0 +1,36 @@
+{
+  "candidate_count": 1,
+  "candidates": [
+    {
+      "additions": 732,
+      "deletions": 4,
+      "patch_file": "f08eed3.patch",
+      "patch_sha256": "9db65dbbf8bf82268375667fe688e7b0d44b1840b74d26dd68a53b93815c709b",
+      "paths": [
+        "docs/backends.md",
+        "espeakng_runtime/backends/cli.py",
+        "espeakng_runtime/backends/native.py",
+        "espeakng_runtime/discovery.py",
+        "espeakng_runtime/types.py",
+        "pyproject.toml",
+        "tests/__init__.py",
+        "tests/_phoneme_parity.py",
+        "tests/data/en_phoneme_parity.txt",
+        "tests/test_native.py",
+        "tests/test_parity.py",
+        "tools/check_backend_parity.py"
+      ],
+      "sha": "f08eed3c9500f156c4ea564fb8ece8cde17977a2",
+      "short_sha": "f08eed3",
+      "source_ref": "git:f08eed3c9500f156c4ea564fb8ece8cde17977a2"
+    }
+  ],
+  "git_base_ref": "8cae6e80e666765e263ae5adb11244e8a7b80f16",
+  "git_base_sha": "8cae6e80e666765e263ae5adb11244e8a7b80f16",
+  "git_head_ref": "f08eed3c9500f156c4ea564fb8ece8cde17977a2",
+  "git_head_sha": "f08eed3c9500f156c4ea564fb8ece8cde17977a2",
+  "include_merges": "nontrivial",
+  "object_type": "git_evidence_manifest",
+  "release_version": "v0.1.4",
+  "schema_version": 1
+}

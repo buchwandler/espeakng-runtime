@@ -1,0 +1,967 @@
+ docs/backends.md                    |  37 +++++++
+ espeakng_runtime/backends/cli.py    |   2 +
+ espeakng_runtime/backends/native.py | 120 ++++++++++++++++++++-
+ espeakng_runtime/discovery.py       |  20 +++-
+ espeakng_runtime/types.py           |   2 +
+ pyproject.toml                      |   1 +
+ tests/__init__.py                   |   0
+ tests/_phoneme_parity.py            |  62 +++++++++++
+ tests/data/en_phoneme_parity.txt    |  28 +++++
+ tests/test_native.py                | 207 +++++++++++++++++++++++++++++++++++-
+ tests/test_parity.py                | 109 +++++++++++++++++++
+ tools/check_backend_parity.py       | 148 ++++++++++++++++++++++++++
+ 12 files changed, 732 insertions(+), 4 deletions(-)
+
+diff --git a/docs/backends.md b/docs/backends.md
+index ccf085b..c99962e 100644
+--- a/docs/backends.md
++++ b/docs/backends.md
+@@ -50,3 +50,40 @@ The CLI backend starts eSpeak for each operation. An explicit data directory, th
+ Exact native clauses preserve the complete eSpeak NG terminator code. The six common punctuation constants are comma, colon, semicolon, period, question mark, and exclamation mark. The sentence boundary is derived independently from the sentence-type bit.
+
+ Other backends use a documented best-effort punctuation splitter. Its output is useful for migration and ordinary processing, but it is not a substitute for exact native metadata.
++
++## Phoneme output semantics
++
++The native backend supports two phoneme output paths:
++
++### Native trace (CLI-equivalent)
++
++When the native library exposes `espeak_SetPhonemeCallback`, `espeak_Synth`, and `espeak_Synchronize`, the backend uses the synthesis trace path. This produces phoneme output identical to the CLI's `-x --ipa` mode, including stress markers on weak words and contractions.
++
++```text
++RuntimeInfo.phoneme_output_api = "native-trace"
++RuntimeInfo.phoneme_parity = "exact"
++```
++
++### Native translation (legacy)
++
++Older libraries or builds without trace symbols use the `espeak_TextToPhonemes` direct translation API. This path may produce different stress semantics than the CLI for some words.
++
++```text
++RuntimeInfo.phoneme_output_api = "native-translation"
++RuntimeInfo.phoneme_parity = "best-effort"
++```
++
++### CLI backend
++
++The CLI backend always uses the eSpeak executable's synthesis phoneme output.
++
++```text
++RuntimeInfo.phoneme_output_api = "cli"
++RuntimeInfo.phoneme_parity = "exact"
++```
++
++### Auto-mode behavior
++
++When `mode="auto"`, the runtime prefers native trace when available. This ensures `mode="auto"` produces CLI-equivalent phoneme output on modern eSpeak NG installations.
++
++The `parity` field on `RuntimeInfo` is preserved for backward compatibility but relates to exact clause API support, not phoneme output semantics. Use `phoneme_output_api` and `phoneme_parity` for phoneme-level diagnostics.
+diff --git a/espeakng_runtime/backends/cli.py b/espeakng_runtime/backends/cli.py
+index 1fe87b6..b35544e 100644
+--- a/espeakng_runtime/backends/cli.py
++++ b/espeakng_runtime/backends/cli.py
+@@ -80,6 +80,8 @@ class CliBackend:
+             source="cli",
+             version=self.version,
+             exact_clause_api=False,
++            phoneme_output_api="cli",
++            phoneme_parity="exact",
+             parity="best-effort",
+             fallback_reason=self.fallback_reason,
+             fallback_code=self.fallback_code,
+diff --git a/espeakng_runtime/backends/native.py b/espeakng_runtime/backends/native.py
+index eaa1b4c..fba1713 100644
+--- a/espeakng_runtime/backends/native.py
++++ b/espeakng_runtime/backends/native.py
+@@ -23,6 +23,17 @@ CHARS_UTF8 = 1
+ PHONEMES_IPA = 0x02
+ PHONEMES_TIE = 0x80
+
++# Phoneme trace mode flags for espeak_SetPhonemeTrace
++PHONEME_EVENTS_FLAG = 0x100
++
++# espeak_AUDIO_OUTPUT values
++# AUDIO_OUTPUT_PLAYBACK = 0
++# AUDIO_OUTPUT_RETRIEVAL = 1
++# AUDIO_OUTPUT_SYNCHRONOUS = 2
++# AUDIO_OUTPUT_SYNCH_PLAYBACK = 3
++
++# Callback type: int (*callback)(const char *phoneme)
++_PHONEME_CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p)
+ CLAUSE_TYPE_SENTENCE = 0x00080000
+ CLAUSE_PUNCTUATION_MASK = 0x000FFFFF
+
+@@ -177,6 +188,27 @@ class _NativeManager:
+         if hasattr(library, "espeak_SetVoiceByProperties"):
+             library.espeak_SetVoiceByProperties.argtypes = [ctypes.POINTER(_VoiceStruct)]
+             library.espeak_SetVoiceByProperties.restype = ctypes.c_int
++        if hasattr(library, "espeak_SetPhonemeTrace"):
++            library.espeak_SetPhonemeTrace.argtypes = [ctypes.c_int, ctypes.c_void_p]
++            library.espeak_SetPhonemeTrace.restype = None
++        if hasattr(library, "espeak_SetPhonemeCallback"):
++            library.espeak_SetPhonemeCallback.argtypes = [_PHONEME_CALLBACK]
++            library.espeak_SetPhonemeCallback.restype = _PHONEME_CALLBACK
++        if hasattr(library, "espeak_Synth"):
++            library.espeak_Synth.argtypes = [
++                ctypes.c_char_p,  # text
++                ctypes.c_uint,    # size
++                ctypes.c_uint,    # position
++                ctypes.c_int,     # position_type
++                ctypes.c_uint,    # end_position
++                ctypes.c_uint,    # flags
++                ctypes.POINTER(ctypes.c_uint),  # unique_identifier
++                ctypes.c_void_p,  # user_data
++            ]
++            library.espeak_Synth.restype = ctypes.c_int
++        if hasattr(library, "espeak_Synchronize"):
++            library.espeak_Synchronize.argtypes = []
++            library.espeak_Synchronize.restype = None
+
+     def release(self) -> None:
+         with self.lock:
+@@ -214,6 +246,16 @@ class NativeBackend:
+         self._requested_mode = requested_mode
+         self._fallback_reason = fallback_reason
+         self.exact_clause_api = hasattr(self._library, "espeak_TextToPhonemesWithTerminator")
++        self.phoneme_trace_api = all(
++            hasattr(self._library, name)
++            for name in (
++                "espeak_SetPhonemeTrace",
++                "espeak_SetPhonemeCallback",
++                "espeak_Synth",
++                "espeak_Synchronize",
++            )
++        )
++        self._phoneme_callback_obj: object | None = None  # prevent GC of C callback
+
+     @property
+     def info(self) -> RuntimeInfo:
+@@ -226,6 +268,8 @@ class NativeBackend:
+             source=self._source,
+             version=_MANAGER.version,
+             exact_clause_api=self.exact_clause_api,
++            phoneme_output_api="native-trace" if self.phoneme_trace_api else "native-translation",
++            phoneme_parity="exact" if self.phoneme_trace_api else "best-effort",
+             parity="exact" if self.exact_clause_api else "best-effort",
+             fallback_reason=self._fallback_reason,
+         )
+@@ -273,7 +317,7 @@ class NativeBackend:
+             mode |= ord(separator[0]) << 8
+         return mode
+
+-    def _phonemize_body_locked(
++    def _translate_phonemes_locked(
+         self,
+         text: str,
+         *,
+@@ -281,7 +325,7 @@ class NativeBackend:
+         use_tie: bool,
+         tie_char: str,
+     ) -> str:
+-        """Phonemize text assuming voice is already set."""
++        """Phonemize using espeak_TextToPhonemes (legacy translation path)."""
+         buffer = ctypes.create_string_buffer(text.encode("utf-8") + b"\0")
+         pointer = ctypes.c_void_p(ctypes.addressof(buffer))
+         mode = self._phoneme_mode(separator, use_tie, tie_char)
+@@ -296,6 +340,78 @@ class NativeBackend:
+         joined = " ".join(chunk.strip() for chunk in chunks if chunk.strip())
+         return normalize_phoneme_output(joined)
+
++    def _trace_phonemes_locked(
++        self,
++        text: str,
++        *,
++        separator: str | None,
++        use_tie: bool,
++        tie_char: str,
++    ) -> str:
++        """Phonemize using synthesis trace (CLI-equivalent path)."""
++        mode = self._phoneme_mode(separator, use_tie, tie_char)
++        chunks: list[str] = []
++
++        @_PHONEME_CALLBACK
++        def on_phoneme(value: bytes | None) -> int:
++            if value:
++                chunks.append(value.decode("utf-8", errors="replace"))
++            return 0
++
++        # Store callback to prevent GC while eSpeak may call it
++        self._phoneme_callback_obj = on_phoneme
++        previous_callback = self._library.espeak_SetPhonemeCallback(on_phoneme)
++
++        # Set phoneme trace mode with IPA output
++        # espeak_SetPhonemeTrace(mode, stream) - stream=None for callback mode
++        self._library.espeak_SetPhonemeTrace(mode, None)
++
++        # Synthesize synchronously
++        encoded = text.encode("utf-8")
++        synth_id = ctypes.c_uint(0)
++        result = self._library.espeak_Synth(
++            encoded,
++            len(encoded),  # size
++            0,             # position
++            0,             # position_type
++            0,             # end_position
++            0x20,          # espeakCHARS_UTF8
++            ctypes.byref(synth_id),
++            None,          # user_data
++        )
++        if result != 0:  # EE_OK = 0
++            raise PhonemizationError(f"espeak_Synth failed with code {result}")
++
++        # Wait for synthesis to complete
++        self._library.espeak_Synchronize()
++
++        # Restore previous callback
++        self._library.espeak_SetPhonemeCallback(previous_callback)
++        self._phoneme_callback_obj = None
++
++        joined = " ".join(chunks)
++        return normalize_phoneme_output(joined)
++
++    def _phonemize_body_locked(
++        self,
++        text: str,
++        *,
++        separator: str | None,
++        use_tie: bool,
++        tie_char: str,
++    ) -> str:
++        """Phonemize text assuming voice is already set.
++
++        Uses trace API when available for CLI-equivalent semantics,
++        falls back to direct translation otherwise.
++        """
++        if self.phoneme_trace_api:
++            return self._trace_phonemes_locked(
++                text, separator=separator, use_tie=use_tie, tie_char=tie_char
++            )
++        return self._translate_phonemes_locked(
++            text, separator=separator, use_tie=use_tie, tie_char=tie_char
++        )
+     def _phonemize_locked(
+         self,
+         text: str,
+diff --git a/espeakng_runtime/discovery.py b/espeakng_runtime/discovery.py
+index 2a9c7ab..451b071 100644
+--- a/espeakng_runtime/discovery.py
++++ b/espeakng_runtime/discovery.py
+@@ -39,11 +39,11 @@ class LibraryProbe:
+     data: str | None
+     loadable: bool
+     exact_clause_api: bool
++    phoneme_trace_api: bool = False
+     error: str | None = None
+
+     missing_symbols: tuple[str, ...] = ()
+
+-
+ @dataclass(frozen=True, slots=True)
+ class EspeakInspection:
+     """Non-initializing eSpeak capability and candidate inspection."""
+@@ -70,6 +70,16 @@ class EspeakInspection:
+             )
+         )
+
++    @property
++    def trace_native_available(self) -> bool:
++        """True when the selected native library exposes the phoneme trace API."""
++        return bool(
++            self.selected_library
++            and any(
++                probe.library == self.selected_library and probe.phoneme_trace_api
++                for probe in self.candidates
++            )
++        )
+
+ _REQUIRED_NATIVE_SYMBOLS = (
+     "espeak_Initialize",
+@@ -78,6 +88,12 @@ _REQUIRED_NATIVE_SYMBOLS = (
+     "espeak_TextToPhonemes",
+ )
+ _EXACT_CLAUSE_SYMBOL = "espeak_TextToPhonemesWithTerminator"
++_TRACE_SYMBOLS = (
++    "espeak_SetPhonemeTrace",
++    "espeak_SetPhonemeCallback",
++    "espeak_Synth",
++    "espeak_Synchronize",
++)
+
+
+ def _loader_paths() -> tuple[str, str | None] | None:
+@@ -295,12 +311,14 @@ def probe_library(candidate: LibraryCandidate) -> LibraryProbe:
+         )
+     missing_symbols = tuple(name for name in _REQUIRED_NATIVE_SYMBOLS if not hasattr(library, name))
+     error = f"missing mandatory symbols: {', '.join(missing_symbols)}" if missing_symbols else None
++    has_trace = all(hasattr(library, name) for name in _TRACE_SYMBOLS)
+     return LibraryProbe(
+         candidate.library,
+         candidate.source,
+         candidate.data,
+         True,
+         hasattr(library, _EXACT_CLAUSE_SYMBOL),
++        has_trace,
+         error,
+         missing_symbols,
+     )
+diff --git a/espeakng_runtime/types.py b/espeakng_runtime/types.py
+index cccaa97..6f415af 100644
+--- a/espeakng_runtime/types.py
++++ b/espeakng_runtime/types.py
+@@ -47,6 +47,8 @@ class RuntimeInfo:
+     source: str | None = None
+     version: str | None = None
+     exact_clause_api: bool = False
++    phoneme_output_api: Literal["cli", "native-trace", "native-translation"] | None = None
++    phoneme_parity: Literal["exact", "best-effort"] | None = None
+     parity: Literal["exact", "best-effort"] = "best-effort"
+     fallback_reason: str | None = None
+     fallback_code: FallbackCode | None = None
+diff --git a/pyproject.toml b/pyproject.toml
+index 30f058b..c0e07f1 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -33,6 +33,7 @@ bundled = ["espeakng-loader>=0.2.4"]
+ dev = [
+   "build>=1",
+   "mypy>=1.10",
++  "phonodist>=0.1,<0.3",
+   "tomli>=2; python_version < '3.11'",
+   "pytest>=8",
+   "pytest-cov>=5",
+diff --git a/tests/__init__.py b/tests/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/tests/_phoneme_parity.py b/tests/_phoneme_parity.py
+new file mode 100644
+index 0000000..a9602a2
+--- /dev/null
++++ b/tests/_phoneme_parity.py
+@@ -0,0 +1,62 @@
++"""Explainable phoneme parity assertion helper for native/CLI backend comparison.
++
++Uses Phonodist for structural mismatch diagnosis when raw outputs differ.
++"""
++
++from __future__ import annotations
++
++import pytest
++
++try:
++    from phonodist import PhonodistError, compare_pronunciations
++except ImportError:  # pragma: no cover
++    compare_pronunciations = None  # type: ignore[assignment]
++    PhonodistError = Exception  # type: ignore[assignment,misc]
++
++
++def assert_phoneme_parity(
++    *,
++    text: str,
++    native: str,
++    cli: str,
++    voice: str,
++) -> None:
++    """Assert native and CLI phoneme outputs are identical.
++
++    On mismatch, uses Phonodist to classify the difference and emits a
++    detailed diagnostic. Raw equality remains the actual parity assertion;
++    Phonodist only improves failure messages.
++    """
++    if native == cli:
++        return
++
++    # Try Phonodist classification for better diagnostics
++    classification = None
++    segment_relation = None
++    stress_info = None
++
++    if compare_pronunciations is not None:
++        try:
++            comparison = compare_pronunciations(native, cli)
++            classification = comparison.classification
++            segment_relation = comparison.segment_relation
++            stress_ops = comparison.stress_operations
++            if stress_ops:
++                stress_info = str(stress_ops)
++        except (PhonodistError, Exception):
++            pass
++
++    lines = [
++        f'text: "{text}"',
++        f"voice: {voice}",
++        f"native: {native!r}",
++        f"cli:    {cli!r}",
++    ]
++    if classification:
++        lines.append(f"classification: {classification}")
++    if segment_relation:
++        lines.append(f"segment_relation: {segment_relation}")
++    if stress_info:
++        lines.append(f"stress_operations: {stress_info}")
++
++    pytest.fail("\n".join(lines))
+diff --git a/tests/data/en_phoneme_parity.txt b/tests/data/en_phoneme_parity.txt
+new file mode 100644
+index 0000000..ebfc6da
+--- /dev/null
++++ b/tests/data/en_phoneme_parity.txt
+@@ -0,0 +1,28 @@
++the
++and
++to
++for
++of
++we
++you
++they
++I'm
++we're
++you're
++they're
++we've
++you've
++we'll
++you'll
++he's
++she's
++it's
++hello
++world
++computer
++beautiful
++running
++quickly
++café
++naïve
++résumé
+diff --git a/tests/test_native.py b/tests/test_native.py
+index 977e23a..03789f5 100644
+--- a/tests/test_native.py
++++ b/tests/test_native.py
+@@ -28,15 +28,18 @@ class FakeNativeLibrary:
+         self,
+         *,
+         exact: bool = True,
++        trace: bool = True,
+         init_result: int = 0,
+         voice_result: int = 0,
+         voice_by_properties_result: int | None = 0,
+         no_progress: bool = False,
++        synth_result: int = 0,
+     ) -> None:
+         self.init_result = init_result
+         self.voice_result = voice_result
+         self.voice_by_properties_result = voice_by_properties_result
+         self.no_progress = no_progress
++        self.synth_result = synth_result
+         self.terminate_calls = 0
+         self.initialize_calls = 0
+         self.voices_calls = 0
+@@ -46,6 +49,17 @@ class FakeNativeLibrary:
+         self.set_voice_by_properties_calls = 0
+         self._clause_index = 0
+
++        # Trace-specific state
++        self.last_phoneme_mode: int | None = None
++        self.last_callback: object | None = None
++        self.set_phoneme_callback_calls = 0
++        self.last_synth_text: bytes | None = None
++        self.synth_calls = 0
++        self.synchronize_calls = 0
++        self.last_trace_mode: int | None = None
++        self.last_trace_stream: object | None = None
++        self.set_phoneme_trace_calls = 0
++
+         self.espeak_Initialize = FakeFunction(self._initialize)
+         self.espeak_SetVoiceByName = FakeFunction(self._set_voice)
+         self.espeak_Terminate = FakeFunction(self._terminate)
+@@ -56,6 +70,11 @@ class FakeNativeLibrary:
+             self.espeak_SetVoiceByProperties = FakeFunction(self._set_voice_by_properties)
+         if exact:
+             self.espeak_TextToPhonemesWithTerminator = FakeFunction(self._exact_clauses)
++        if trace:
++            self.espeak_SetPhonemeTrace = FakeFunction(self._set_phoneme_trace)
++            self.espeak_SetPhonemeCallback = FakeFunction(self._set_phoneme_callback)
++            self.espeak_Synth = FakeFunction(self._synth)
++            self.espeak_Synchronize = FakeFunction(self._synchronize)
+
+     def _initialize(self, *_args: object) -> int:
+         self.initialize_calls += 1
+@@ -80,6 +99,100 @@ class FakeNativeLibrary:
+         ctypes.cast(reported, ctypes.POINTER(ctypes.c_char_p)).contents.value = b"/fake/data"
+         return b"1.0"
+
++    def _phonemes(self, pointer: ctypes.c_void_p, _input_type: int, mode: int) -> bytes:
++        self.last_phoneme_mode = mode
++        value = ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p)).contents
++        if not self.no_progress:
++            value.value = 0
++        return "həloʊ".encode()
++
++    def _exact_clauses(
++        self,
++        pointer: ctypes.c_void_p,
++        _input_type: int,
++        _mode: int,
++        terminator: ctypes.c_void_p,
++    ) -> bytes:
++        value = ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p)).contents
++        code = [0x41014, 0x4001E, 0x4101E, 0x80028, 0x82028, 0x8302D][self._clause_index]
++        self._clause_index += 1
++        ctypes.cast(terminator, ctypes.POINTER(ctypes.c_int)).contents.value = code
++        value.value = 0 if self._clause_index == 6 else self._clause_index
++        return f"clause-{self._clause_index}".encode()
++
++    def _list_voices(self, _spec: object):
++        self.voices_calls += 1
++        item = native._VoiceStruct(
++            name=b"Alice",
++            languages=b"\x05en-us",
++            identifier=b"en-us",
++            gender=2,
++            age=30,
++            variant=0,
++            xx1=0,
++            score=0,
++            spare=None,
++        )
++        array_type = ctypes.POINTER(native._VoiceStruct) * 2
++        return array_type(ctypes.pointer(item), None)
++
++    def _set_phoneme_trace(self, mode: int, stream: object) -> None:
++        self.last_trace_mode = mode
++        self.last_trace_stream = stream
++        self.set_phoneme_trace_calls += 1
++
++    def _set_phoneme_callback(self, callback: object) -> object:
++        self.last_callback = callback
++        self.set_phoneme_callback_calls += 1
++        return callback  # Return the callback as previous
++
++    def _synth(
++        self,
++        text: bytes,
++        size: int,
++        position: int,
++        position_type: int,
++        end_position: int,
++        flags: int,
++        synth_id_ptr: ctypes.c_void_p,
++        user_data: object,
++    ) -> int:
++        self.last_synth_text = text
++        self.synth_calls += 1
++        # Simulate callback invocation if registered
++        if self.last_callback is not None:
++            # Call the callback with fake phoneme output
++            try:
++                self.last_callback("həloʊ".encode())
++            except Exception:
++                pass
++        return self.synth_result
++
++    def _synchronize(self) -> None:
++        self.synchronize_calls += 1
++    def _initialize(self, *_args: object) -> int:
++        self.initialize_calls += 1
++        return self.init_result
++
++    def _set_voice(self, voice: bytes) -> int:
++        self.last_voice = voice
++        self.set_voice_by_name_calls += 1
++        return self.voice_result
++
++    def _set_voice_by_properties(self, spec_ptr: ctypes.c_void_p) -> int:
++        spec = ctypes.cast(spec_ptr, ctypes.POINTER(native._VoiceStruct)).contents
++        self.last_voice_properties_language = spec.languages
++        self.set_voice_by_properties_calls += 1
++        return self.voice_by_properties_result
++
++    def _terminate(self) -> int:
++        self.terminate_calls += 1
++        return 0
++
++    def _info(self, reported: ctypes.c_void_p) -> bytes:
++        ctypes.cast(reported, ctypes.POINTER(ctypes.c_char_p)).contents.value = b"/fake/data"
++        return b"1.0"
++
+     def _phonemes(self, pointer: ctypes.c_void_p, _input_type: int, _mode: int) -> bytes:
+         value = ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p)).contents
+         if not self.no_progress:
+@@ -217,7 +330,7 @@ def test_voice_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+
+
+ def test_no_progress_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+-    backend = make_backend(monkeypatch, FakeNativeLibrary(no_progress=True))
++    backend = make_backend(monkeypatch, FakeNativeLibrary(no_progress=True, trace=False))
+     with pytest.raises(PhonemizationError, match="no progress"):
+         backend.phonemize("hello", voice="en-us")
+     backend.close()
+@@ -350,3 +463,95 @@ def test_voice_selection_stays_inside_manager_lock(monkeypatch: pytest.MonkeyPat
+         backend.phonemize("hello", voice="en-us")
+     assert library.set_voice_by_name_calls == 5
+     backend.close()
++
++
++# --- Trace capability tests ---
++
++
++def test_native_trace_capability_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
++    """Backend reports phoneme_trace_api when trace symbols are present."""
++    backend = make_backend(monkeypatch, FakeNativeLibrary(trace=True))
++    assert backend.phoneme_trace_api
++    assert backend.info.phoneme_output_api == "native-trace"
++    assert backend.info.phoneme_parity == "exact"
++    backend.close()
++
++
++def test_native_trace_capability_absent(monkeypatch: pytest.MonkeyPatch) -> None:
++    """Backend reports native-translation when trace symbols are absent."""
++    backend = make_backend(monkeypatch, FakeNativeLibrary(trace=False))
++    assert not backend.phoneme_trace_api
++    assert backend.info.phoneme_output_api == "native-translation"
++    assert backend.info.phoneme_parity == "best-effort"
++    backend.close()
++
++
++def test_trace_path_is_preferred_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
++    """Trace path is used when trace symbols are available."""
++    library = FakeNativeLibrary(trace=True)
++    backend = make_backend(monkeypatch, library)
++    backend.phonemize("hello", voice="en-us")
++    assert library.synth_calls == 1
++    assert library.synchronize_calls == 1
++    backend.close()
++
++
++def test_translation_path_used_without_trace(monkeypatch: pytest.MonkeyPatch) -> None:
++    """Legacy translation path used when trace symbols are absent."""
++    library = FakeNativeLibrary(trace=False)
++    backend = make_backend(monkeypatch, library)
++    result = backend.phonemize("hello", voice="en-us")
++    assert result == "həloʊ"
++    assert library.synth_calls == 0
++    backend.close()
++
++
++def test_tie_mode_forwarded_to_trace(monkeypatch: pytest.MonkeyPatch) -> None:
++    """Tie mode is forwarded to trace API."""
++    library = FakeNativeLibrary(trace=True)
++    backend = make_backend(monkeypatch, library)
++    backend.phonemize("hello", voice="en-us", use_tie=True, tie_char="\u200d")
++    # Check that SetPhonemeTrace was called with the correct mode
++    # PHONEMES_IPA | PHONEMES_TIE | (ord('\u200d') << 8)
++    expected_mode = 0x02 | 0x80 | (ord('\u200d') << 8)
++    assert library.last_trace_mode == expected_mode
++    backend.close()
++
++
++def test_separator_mode_forwarded_to_trace(monkeypatch: pytest.MonkeyPatch) -> None:
++    """Separator mode is forwarded to trace API."""
++    library = FakeNativeLibrary(trace=True)
++    backend = make_backend(monkeypatch, library)
++    backend.phonemize("hello", voice="en-us", separator="_")
++    # PHONEMES_IPA | (ord('_') << 8)
++    expected_mode = 0x02 | (ord('_') << 8)
++    assert library.last_trace_mode == expected_mode
++    backend.close()
++
++
++def test_callback_is_retained(monkeypatch: pytest.MonkeyPatch) -> None:
++    """Callback object is retained to prevent GC during synthesis."""
++    library = FakeNativeLibrary(trace=True)
++    backend = make_backend(monkeypatch, library)
++    backend.phonemize("hello", voice="en-us")
++    assert library.set_phoneme_callback_calls == 2  # set + restore
++    assert backend._phoneme_callback_obj is None  # cleared after synthesis
++    backend.close()
++
++
++def test_synthesis_failure_maps_to_phonemization_error(monkeypatch: pytest.MonkeyPatch) -> None:
++    """espeak_Synth failure raises PhonemizationError."""
++    library = FakeNativeLibrary(trace=True, synth_result=1)  # non-zero = error
++    backend = make_backend(monkeypatch, library)
++    with pytest.raises(PhonemizationError, match="espeak_Synth failed"):
++        backend.phonemize("hello", voice="en-us")
++    backend.close()
++
++
++def test_trace_phonemize_returns_correct_output(monkeypatch: pytest.MonkeyPatch) -> None:
++    """Trace path returns normalized phoneme output."""
++    library = FakeNativeLibrary(trace=True)
++    backend = make_backend(monkeypatch, library)
++    result = backend.phonemize("hello", voice="en-us")
++    assert result == "həloʊ"
++    backend.close()
+diff --git a/tests/test_parity.py b/tests/test_parity.py
+index 4727aba..e62153b 100644
+--- a/tests/test_parity.py
++++ b/tests/test_parity.py
+@@ -178,3 +178,112 @@ def test_auto_mode_parity_with_regional_selector() -> None:
+                 continue
+             msg = f"{selector} auto: auto={auto_value!r} cli={cli_value!r}"
+             assert auto_value == cli_value, msg
++
++
++# --- English weak-word parity ---
++
++ENGLISH_WEAK_WORD_PARITY_CASES = (
++    "the",
++    "and",
++    "to",
++    "for",
++    "of",
++    "we",
++    "you",
++    "they",
++    "I'm",
++    "we're",
++    "you're",
++    "they're",
++    "we've",
++    "you've",
++    "we'll",
++    "you'll",
++    "he's",
++    "she's",
++    "it's",
++)
++
++
++@pytest.mark.espeak
++@pytest.mark.parametrize("text", ENGLISH_WEAK_WORD_PARITY_CASES)
++def test_english_weak_word_parity_zwj(text: str) -> None:
++    """Weak words and contractions produce identical output on native and CLI with U+200D tie."""
++    if not _backends_available():
++        pytest.skip("both eSpeak CLI and native library are required")
++    kwargs = {"voice": "en-us", "use_tie": True, "tie_char": "\u200d"}
++    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
++        native_value = native_runtime.phonemize(text, **kwargs)
++        cli_value = cli_runtime.phonemize(text, **kwargs)
++        from tests._phoneme_parity import assert_phoneme_parity
++
++        assert_phoneme_parity(
++            text=text,
++            native=native_value,
++            cli=cli_value,
++            voice="en-us",
++        )
++
++
++@pytest.mark.espeak
++def test_phrase_context_parity() -> None:
++    """Phrase context produces identical output on native and CLI."""
++    if not _backends_available():
++        pytest.skip("both eSpeak CLI and native library are required")
++    kwargs = {"voice": "en-us", "use_tie": True, "tie_char": "\u200d"}
++    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
++        for phrase in ("we're feel play", "I'm going to the store", "you're welcome"):
++            native_value = native_runtime.phonemize(phrase, **kwargs)
++            cli_value = cli_runtime.phonemize(phrase, **kwargs)
++            from tests._phoneme_parity import assert_phoneme_parity
++
++            assert_phoneme_parity(
++                text=phrase,
++                native=native_value,
++                cli=cli_value,
++                voice="en-us",
++            )
++
++
++@pytest.mark.espeak
++def test_batch_parity_weak_words() -> None:
++    """Batch phonemize_many with weak words produces identical output."""
++    if not _backends_available():
++        pytest.skip("both eSpeak CLI and native library are required")
++    values = ["we're", "the", "hello", "", "we've"]
++    kwargs = {"voice": "en-us", "use_tie": True, "tie_char": "\u200d"}
++    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
++        native_batch = native_runtime.phonemize_many(values, **kwargs)
++        cli_batch = cli_runtime.phonemize_many(values, **kwargs)
++        assert len(native_batch) == len(cli_batch) == len(values)
++        assert native_batch[3] == cli_batch[3] == ""
++        for i, (native_val, cli_val) in enumerate(zip(native_batch, cli_batch)):
++            if values[i] and values[i].strip():
++                from tests._phoneme_parity import assert_phoneme_parity
++
++                assert_phoneme_parity(
++                    text=values[i],
++                    native=native_val,
++                    cli=cli_val,
++                    voice="en-us",
++                )
++
++
++@pytest.mark.espeak
++def test_auto_mode_weak_word_parity() -> None:
++    """mode='auto' matches CLI for weak words when native trace is available."""
++    if not _backends_available():
++        pytest.skip("both eSpeak CLI and native library are required")
++    kwargs = {"voice": "en-us", "use_tie": True, "tie_char": "\u200d"}
++    with EspeakRuntime(mode="auto") as auto_runtime, EspeakRuntime(mode="cli") as cli_runtime:
++        for text in ("we're", "I'm", "the", "we've"):
++            auto_value = auto_runtime.phonemize(text, **kwargs)
++            cli_value = cli_runtime.phonemize(text, **kwargs)
++            from tests._phoneme_parity import assert_phoneme_parity
++
++            assert_phoneme_parity(
++                text=text,
++                native=auto_value,
++                cli=cli_value,
++                voice="en-us",
++            )
+diff --git a/tools/check_backend_parity.py b/tools/check_backend_parity.py
+new file mode 100755
+index 0000000..a1ba7cc
+--- /dev/null
++++ b/tools/check_backend_parity.py
+@@ -0,0 +1,148 @@
++#!/usr/bin/env python3
++"""Development tool to check native/CLI phoneme parity.
++
++Uses Phonodist to classify mismatches when they occur.
++"""
++
++from __future__ import annotations
++
++import argparse
++import sys
++from pathlib import Path
++
++# Add project root to path
++sys.path.insert(0, str(Path(__file__).parent.parent))
++
++from espeakng_runtime import EspeakRuntime
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser(
++        description="Check native/CLI phoneme parity for a word list."
++    )
++    parser.add_argument(
++        "--voice", default="en-us", help="Voice to use (default: en-us)"
++    )
++    parser.add_argument(
++        "--tie",
++        choices=["zwj", "none"],
++        default="zwj",
++        help="Tie mode: zwj for U+200D, none for no tie (default: zwj)",
++    )
++    parser.add_argument(
++        "--input",
++        type=Path,
++        help="Input file with one word per line (default: built-in corpus)",
++    )
++    parser.add_argument(
++        "--separator", default=None, help="Separator character (overrides tie)"
++    )
++    args = parser.parse_args()
++
++    # Determine tie settings
++    use_tie = args.tie == "zwj"
++    tie_char = "\u200d" if use_tie else "\u0361"
++
++    kwargs = {
++        "voice": args.voice,
++        "use_tie": use_tie,
++        "tie_char": tie_char,
++    }
++    if args.separator:
++        kwargs["separator"] = args.separator
++        kwargs["use_tie"] = False
++
++    # Load word list
++    if args.input:
++        words = [
++            line.strip()
++            for line in args.input.read_text().splitlines()
++            if line.strip() and not line.startswith("#")
++        ]
++    else:
++        words = [
++            "the", "and", "to", "for", "of",
++            "we", "you", "they",
++            "I'm", "we're", "you're", "they're",
++            "we've", "you've", "we'll", "you'll",
++            "he's", "she's", "it's",
++            "hello", "world",
++        ]
++
++    if not words:
++        print("No words to check.")
++        return 0
++
++    # Check availability
++    from espeakng_runtime.discovery import maybe_find_executable, select_native
++
++    if maybe_find_executable() is None:
++        print("ERROR: eSpeak CLI not found.", file=sys.stderr)
++        return 1
++    if select_native()[0] is None:
++        print("ERROR: Native eSpeak library not found.", file=sys.stderr)
++        return 1
++
++    # Run comparison
++    try:
++        from phonodist import PhonodistError, compare_pronunciations
++    except ImportError:
++        compare_pronunciations = None
++        PhonodistError = Exception  # type: ignore[misc,assignment]
++
++    exact = 0
++    notation_only = 0
++    stress_only = 0
++    segmental = 0
++    other = 0
++
++    with EspeakRuntime(mode="native") as native_rt, EspeakRuntime(mode="cli") as cli_rt:
++        for word in words:
++            try:
++                native_val = native_rt.phonemize(word, **kwargs)
++                cli_val = cli_rt.phonemize(word, **kwargs)
++            except Exception as e:
++                print(f"ERROR on {word!r}: {e}", file=sys.stderr)
++                continue
++
++            if native_val == cli_val:
++                exact += 1
++                continue
++
++            # Classify mismatch
++            classification = "unknown"
++            if compare_pronunciations is not None:
++                try:
++                    comparison = compare_pronunciations(native_val, cli_val)
++                    classification = comparison.classification
++                except (PhonodistError, Exception):
++                    pass
++
++            if classification == "notation_only":
++                notation_only += 1
++            elif classification == "stress_only":
++                stress_only += 1
++            elif classification == "segmental":
++                segmental += 1
++            else:
++                other += 1
++
++            print(f"{word}")
++            print(f"  native: {native_val}")
++            print(f"  cli:    {cli_val}")
++            print(f"  class:  {classification}")
++
++    # Summary
++    print()
++    print(f"checked:                    {len(words)}")
++    print(f"exact:                      {exact}")
++    print(f"notation_only mismatches:   {notation_only}")
++    print(f"stress_only mismatches:     {stress_only}")
++    print(f"segmental mismatches:       {segmental}")
++    print(f"other mismatches:           {other}")
++
++    return 0 if (stress_only + segmental + other) == 0 else 1
++
++
++if __name__ == "__main__":
++    sys.exit(main())

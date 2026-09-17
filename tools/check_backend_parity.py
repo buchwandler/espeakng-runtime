@@ -17,12 +17,8 @@ from espeakng_runtime import EspeakRuntime
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Check native/CLI phoneme parity for a word list."
-    )
-    parser.add_argument(
-        "--voice", default="en-us", help="Voice to use (default: en-us)"
-    )
+    parser = argparse.ArgumentParser(description="Check native/CLI phoneme parity for a word list.")
+    parser.add_argument("--voice", default="en-us", help="Voice to use (default: en-us)")
     parser.add_argument(
         "--tie",
         choices=["zwj", "none"],
@@ -34,9 +30,7 @@ def main() -> int:
         type=Path,
         help="Input file with one word per line (default: built-in corpus)",
     )
-    parser.add_argument(
-        "--separator", default=None, help="Separator character (overrides tie)"
-    )
+    parser.add_argument("--separator", default=None, help="Separator character (overrides tie)")
     args = parser.parse_args()
 
     # Determine tie settings
@@ -61,12 +55,27 @@ def main() -> int:
         ]
     else:
         words = [
-            "the", "and", "to", "for", "of",
-            "we", "you", "they",
-            "I'm", "we're", "you're", "they're",
-            "we've", "you've", "we'll", "you'll",
-            "he's", "she's", "it's",
-            "hello", "world",
+            "the",
+            "and",
+            "to",
+            "for",
+            "of",
+            "we",
+            "you",
+            "they",
+            "I'm",
+            "we're",
+            "you're",
+            "they're",
+            "we've",
+            "you've",
+            "we'll",
+            "you'll",
+            "he's",
+            "she's",
+            "it's",
+            "hello",
+            "world",
         ]
 
     if not words:
