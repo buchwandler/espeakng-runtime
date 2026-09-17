@@ -3,23 +3,24 @@ schema_version: 2
 object_type: release_entry
 versioning:
   schema_version: 1
-  revision: 1
+  revision: 4
 entry_id: entry-0004
 release_version: v0.1.1
-kind: added
+kind: changed
 summary:
-  Added language-style voice resolution with deterministic standard and explicit
-  MBROLA selection
+  Changed parity tests with regional locale matrix, custom U+200D tie coverage,
+  batch parity, and auto mode parity
 status: accepted
 audience: null
 scopes: []
 source_refs: []
 paths:
-  - espeakng_runtime/_voices.py
-  - espeakng_runtime/runtime.py
+  - tests/test_parity.py
+  - tests/test_native.py
 issues: []
 prs: []
-sources: []
+sources:
+  - git:d4d410c136fe4d4f3f2f87a8315b5bf8cd01ddf3
 contributors: []
 breaking: false
 internal: false

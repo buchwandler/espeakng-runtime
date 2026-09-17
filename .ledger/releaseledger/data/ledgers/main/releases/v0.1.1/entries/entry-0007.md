@@ -4,16 +4,18 @@ object_type: release_entry
 versioning:
   schema_version: 1
   revision: 1
-entry_id: entry-0005
+entry_id: entry-0007
 release_version: v0.1.1
 kind: docs
-summary: Documented native voice selector resolution algorithm (name-first, language-property-second)
+summary:
+  Documented auto mode compatibility for downstream consumers in migration
+  guide
 status: accepted
 audience: null
 scopes: []
 source_refs: []
 paths:
-  - docs/backends.md
+  - MIGRATION.md
 issues: []
 prs: []
 sources:
@@ -21,5 +23,5 @@ sources:
 contributors: []
 breaking: false
 internal: false
-order: 5
+order: 7
 ---

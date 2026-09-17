@@ -177,6 +177,7 @@ class _NativeManager:
         if hasattr(library, "espeak_SetVoiceByProperties"):
             library.espeak_SetVoiceByProperties.argtypes = [ctypes.POINTER(_VoiceStruct)]
             library.espeak_SetVoiceByProperties.restype = ctypes.c_int
+
     def release(self) -> None:
         with self.lock:
             self.users = max(0, self.users - 1)
@@ -255,6 +256,7 @@ class NativeBackend:
             f"eSpeak voice/language selector {voice!r} was not found"
             f" (name lookup code {name_code}; language-property lookup unavailable)"
         )
+
     @staticmethod
     def _phoneme_mode(
         separator: str | None,

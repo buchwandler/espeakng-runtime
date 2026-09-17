@@ -56,6 +56,7 @@ class FakeNativeLibrary:
             self.espeak_SetVoiceByProperties = FakeFunction(self._set_voice_by_properties)
         if exact:
             self.espeak_TextToPhonemesWithTerminator = FakeFunction(self._exact_clauses)
+
     def _initialize(self, *_args: object) -> int:
         self.initialize_calls += 1
         return self.init_result
@@ -70,6 +71,7 @@ class FakeNativeLibrary:
         self.last_voice_properties_language = spec.languages
         self.set_voice_by_properties_calls += 1
         return self.voice_by_properties_result
+
     def _terminate(self) -> int:
         self.terminate_calls += 1
         return 0
@@ -212,6 +214,7 @@ def test_voice_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(VoiceNotFoundError):
         backend.phonemize("hello", voice="missing")
     backend.close()
+
 
 def test_no_progress_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     backend = make_backend(monkeypatch, FakeNativeLibrary(no_progress=True))

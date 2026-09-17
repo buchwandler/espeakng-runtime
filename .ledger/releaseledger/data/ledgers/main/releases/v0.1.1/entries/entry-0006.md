@@ -7,19 +7,19 @@ versioning:
 entry_id: entry-0006
 release_version: v0.1.1
 kind: docs
-summary: Documented voice request resolution and runtime lifecycle behavior
+summary:
+  Documented regional locale selector support and custom tie examples in usage
+  guide
 status: accepted
 audience: null
 scopes: []
 source_refs: []
 paths:
-  - README.md
-  - docs/api.md
-  - docs/backends.md
-  - MIGRATION.md
+  - docs/usage.md
 issues: []
 prs: []
-sources: []
+sources:
+  - git:d4d410c136fe4d4f3f2f87a8315b5bf8cd01ddf3
 contributors: []
 breaking: false
 internal: false

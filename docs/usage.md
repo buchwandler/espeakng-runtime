@@ -21,6 +21,7 @@ with EspeakRuntime(mode="auto") as runtime:
     runtime.phonemize("bonjour", voice="fr-fr")
     runtime.phonemize("hej", voice="sv-se")
 ```
+
 ## Options and batches
 
 ```python

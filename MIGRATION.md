@@ -22,6 +22,7 @@ raw = self._espeak.phonemize(
 )
 # existing kokorog2p from_espeak/raw-vocabulary handling follows here
 ```
+
 `voice=` accepts language-style requests as well as concrete identifiers. The runtime resolves these requests against the active inventory, so a request such as `en-gb` can select the installed native identifier `en`. Common locale selectors such as `de-de`, `en-gb`, `fr-fr`, `sv-se`, and `pt-br` work consistently across native and CLI backends. The native backend first attempts voice-name lookup and, when that fails, retries as a language property via `espeak_SetVoiceByProperties`. Consumers do not need to maintain their own language alias tables.
 
 Normal requests do not select MBROLA implicitly. Call `resolve_voice(request, allow_mbrola=True)` or use an explicit `mb/...` or `mb-...` request when MBROLA is intended. `RuntimeInfo.version_tuple` provides normalized numeric version components.
