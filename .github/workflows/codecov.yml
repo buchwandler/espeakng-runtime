@@ -8,11 +8,11 @@ env:
 jobs:
   run:
     runs-on: ubuntu-latest
-    env:
-      LEXPHON_DATA_HOME: ${{ runner.temp }}/lexphon-data
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure LexPhon data directory
+        run: echo "LEXPHON_DATA_HOME=$RUNNER_TEMP/lexphon-data" >> "$GITHUB_ENV"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
