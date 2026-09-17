@@ -80,6 +80,8 @@ class CliBackend:
             source="cli",
             version=self.version,
             exact_clause_api=False,
+            phoneme_output_api="cli",
+            phoneme_parity="exact",
             parity="best-effort",
             fallback_reason=self.fallback_reason,
             fallback_code=self.fallback_code,

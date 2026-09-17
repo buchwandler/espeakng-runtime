@@ -47,6 +47,8 @@ class RuntimeInfo:
     source: str | None = None
     version: str | None = None
     exact_clause_api: bool = False
+    phoneme_output_api: Literal["cli", "native-trace", "native-translation"] | None = None
+    phoneme_parity: Literal["exact", "best-effort"] | None = None
     parity: Literal["exact", "best-effort"] = "best-effort"
     fallback_reason: str | None = None
     fallback_code: FallbackCode | None = None

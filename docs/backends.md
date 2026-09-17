@@ -50,3 +50,40 @@ The CLI backend starts eSpeak for each operation. An explicit data directory, th
 Exact native clauses preserve the complete eSpeak NG terminator code. The six common punctuation constants are comma, colon, semicolon, period, question mark, and exclamation mark. The sentence boundary is derived independently from the sentence-type bit.
 
 Other backends use a documented best-effort punctuation splitter. Its output is useful for migration and ordinary processing, but it is not a substitute for exact native metadata.
+
+## Phoneme output semantics
+
+The native backend supports two phoneme output paths:
+
+### Native trace (CLI-equivalent)
+
+When the native library exposes `espeak_SetPhonemeCallback`, `espeak_Synth`, and `espeak_Synchronize`, the backend uses the synthesis trace path. This produces phoneme output identical to the CLI's `-x --ipa` mode, including stress markers on weak words and contractions.
+
+```text
+RuntimeInfo.phoneme_output_api = "native-trace"
+RuntimeInfo.phoneme_parity = "exact"
+```
+
+### Native translation (legacy)
+
+Older libraries or builds without trace symbols use the `espeak_TextToPhonemes` direct translation API. This path may produce different stress semantics than the CLI for some words.
+
+```text
+RuntimeInfo.phoneme_output_api = "native-translation"
+RuntimeInfo.phoneme_parity = "best-effort"
+```
+
+### CLI backend
+
+The CLI backend always uses the eSpeak executable's synthesis phoneme output.
+
+```text
+RuntimeInfo.phoneme_output_api = "cli"
+RuntimeInfo.phoneme_parity = "exact"
+```
+
+### Auto-mode behavior
+
+When `mode="auto"`, the runtime prefers native trace when available. This ensures `mode="auto"` produces CLI-equivalent phoneme output on modern eSpeak NG installations.
+
+The `parity` field on `RuntimeInfo` is preserved for backward compatibility but relates to exact clause API support, not phoneme output semantics. Use `phoneme_output_api` and `phoneme_parity` for phoneme-level diagnostics.

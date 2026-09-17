@@ -23,6 +23,17 @@ CHARS_UTF8 = 1
 PHONEMES_IPA = 0x02
 PHONEMES_TIE = 0x80
 
+# Phoneme trace mode flags for espeak_SetPhonemeTrace
+PHONEME_EVENTS_FLAG = 0x100
+
+# espeak_AUDIO_OUTPUT values
+# AUDIO_OUTPUT_PLAYBACK = 0
+# AUDIO_OUTPUT_RETRIEVAL = 1
+# AUDIO_OUTPUT_SYNCHRONOUS = 2
+# AUDIO_OUTPUT_SYNCH_PLAYBACK = 3
+
+# Callback type: int (*callback)(const char *phoneme)
+_PHONEME_CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p)
 CLAUSE_TYPE_SENTENCE = 0x00080000
 CLAUSE_PUNCTUATION_MASK = 0x000FFFFF
 
@@ -177,6 +188,27 @@ class _NativeManager:
         if hasattr(library, "espeak_SetVoiceByProperties"):
             library.espeak_SetVoiceByProperties.argtypes = [ctypes.POINTER(_VoiceStruct)]
             library.espeak_SetVoiceByProperties.restype = ctypes.c_int
+        if hasattr(library, "espeak_SetPhonemeTrace"):
+            library.espeak_SetPhonemeTrace.argtypes = [ctypes.c_int, ctypes.c_void_p]
+            library.espeak_SetPhonemeTrace.restype = None
+        if hasattr(library, "espeak_SetPhonemeCallback"):
+            library.espeak_SetPhonemeCallback.argtypes = [_PHONEME_CALLBACK]
+            library.espeak_SetPhonemeCallback.restype = _PHONEME_CALLBACK
+        if hasattr(library, "espeak_Synth"):
+            library.espeak_Synth.argtypes = [
+                ctypes.c_char_p,  # text
+                ctypes.c_uint,    # size
+                ctypes.c_uint,    # position
+                ctypes.c_int,     # position_type
+                ctypes.c_uint,    # end_position
+                ctypes.c_uint,    # flags
+                ctypes.POINTER(ctypes.c_uint),  # unique_identifier
+                ctypes.c_void_p,  # user_data
+            ]
+            library.espeak_Synth.restype = ctypes.c_int
+        if hasattr(library, "espeak_Synchronize"):
+            library.espeak_Synchronize.argtypes = []
+            library.espeak_Synchronize.restype = None
 
     def release(self) -> None:
         with self.lock:
@@ -214,6 +246,16 @@ class NativeBackend:
         self._requested_mode = requested_mode
         self._fallback_reason = fallback_reason
         self.exact_clause_api = hasattr(self._library, "espeak_TextToPhonemesWithTerminator")
+        self.phoneme_trace_api = all(
+            hasattr(self._library, name)
+            for name in (
+                "espeak_SetPhonemeTrace",
+                "espeak_SetPhonemeCallback",
+                "espeak_Synth",
+                "espeak_Synchronize",
+            )
+        )
+        self._phoneme_callback_obj: object | None = None  # prevent GC of C callback
 
     @property
     def info(self) -> RuntimeInfo:
@@ -226,6 +268,8 @@ class NativeBackend:
             source=self._source,
             version=_MANAGER.version,
             exact_clause_api=self.exact_clause_api,
+            phoneme_output_api="native-trace" if self.phoneme_trace_api else "native-translation",
+            phoneme_parity="exact" if self.phoneme_trace_api else "best-effort",
             parity="exact" if self.exact_clause_api else "best-effort",
             fallback_reason=self._fallback_reason,
         )
@@ -273,7 +317,7 @@ class NativeBackend:
             mode |= ord(separator[0]) << 8
         return mode
 
-    def _phonemize_body_locked(
+    def _translate_phonemes_locked(
         self,
         text: str,
         *,
@@ -281,7 +325,7 @@ class NativeBackend:
         use_tie: bool,
         tie_char: str,
     ) -> str:
-        """Phonemize text assuming voice is already set."""
+        """Phonemize using espeak_TextToPhonemes (legacy translation path)."""
         buffer = ctypes.create_string_buffer(text.encode("utf-8") + b"\0")
         pointer = ctypes.c_void_p(ctypes.addressof(buffer))
         mode = self._phoneme_mode(separator, use_tie, tie_char)
@@ -296,6 +340,78 @@ class NativeBackend:
         joined = " ".join(chunk.strip() for chunk in chunks if chunk.strip())
         return normalize_phoneme_output(joined)
 
+    def _trace_phonemes_locked(
+        self,
+        text: str,
+        *,
+        separator: str | None,
+        use_tie: bool,
+        tie_char: str,
+    ) -> str:
+        """Phonemize using synthesis trace (CLI-equivalent path)."""
+        mode = self._phoneme_mode(separator, use_tie, tie_char)
+        chunks: list[str] = []
+
+        @_PHONEME_CALLBACK
+        def on_phoneme(value: bytes | None) -> int:
+            if value:
+                chunks.append(value.decode("utf-8", errors="replace"))
+            return 0
+
+        # Store callback to prevent GC while eSpeak may call it
+        self._phoneme_callback_obj = on_phoneme
+        previous_callback = self._library.espeak_SetPhonemeCallback(on_phoneme)
+
+        # Set phoneme trace mode with IPA output
+        # espeak_SetPhonemeTrace(mode, stream) - stream=None for callback mode
+        self._library.espeak_SetPhonemeTrace(mode, None)
+
+        # Synthesize synchronously
+        encoded = text.encode("utf-8")
+        synth_id = ctypes.c_uint(0)
+        result = self._library.espeak_Synth(
+            encoded,
+            len(encoded),  # size
+            0,             # position
+            0,             # position_type
+            0,             # end_position
+            0x20,          # espeakCHARS_UTF8
+            ctypes.byref(synth_id),
+            None,          # user_data
+        )
+        if result != 0:  # EE_OK = 0
+            raise PhonemizationError(f"espeak_Synth failed with code {result}")
+
+        # Wait for synthesis to complete
+        self._library.espeak_Synchronize()
+
+        # Restore previous callback
+        self._library.espeak_SetPhonemeCallback(previous_callback)
+        self._phoneme_callback_obj = None
+
+        joined = " ".join(chunks)
+        return normalize_phoneme_output(joined)
+
+    def _phonemize_body_locked(
+        self,
+        text: str,
+        *,
+        separator: str | None,
+        use_tie: bool,
+        tie_char: str,
+    ) -> str:
+        """Phonemize text assuming voice is already set.
+
+        Uses trace API when available for CLI-equivalent semantics,
+        falls back to direct translation otherwise.
+        """
+        if self.phoneme_trace_api:
+            return self._trace_phonemes_locked(
+                text, separator=separator, use_tie=use_tie, tie_char=tie_char
+            )
+        return self._translate_phonemes_locked(
+            text, separator=separator, use_tie=use_tie, tie_char=tie_char
+        )
     def _phonemize_locked(
         self,
         text: str,

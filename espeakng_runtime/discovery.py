@@ -39,10 +39,10 @@ class LibraryProbe:
     data: str | None
     loadable: bool
     exact_clause_api: bool
+    phoneme_trace_api: bool = False
     error: str | None = None
 
     missing_symbols: tuple[str, ...] = ()
-
 
 @dataclass(frozen=True, slots=True)
 class EspeakInspection:
@@ -70,6 +70,16 @@ class EspeakInspection:
             )
         )
 
+    @property
+    def trace_native_available(self) -> bool:
+        """True when the selected native library exposes the phoneme trace API."""
+        return bool(
+            self.selected_library
+            and any(
+                probe.library == self.selected_library and probe.phoneme_trace_api
+                for probe in self.candidates
+            )
+        )
 
 _REQUIRED_NATIVE_SYMBOLS = (
     "espeak_Initialize",
@@ -78,6 +88,12 @@ _REQUIRED_NATIVE_SYMBOLS = (
     "espeak_TextToPhonemes",
 )
 _EXACT_CLAUSE_SYMBOL = "espeak_TextToPhonemesWithTerminator"
+_TRACE_SYMBOLS = (
+    "espeak_SetPhonemeTrace",
+    "espeak_SetPhonemeCallback",
+    "espeak_Synth",
+    "espeak_Synchronize",
+)
 
 
 def _loader_paths() -> tuple[str, str | None] | None:
@@ -295,12 +311,14 @@ def probe_library(candidate: LibraryCandidate) -> LibraryProbe:
         )
     missing_symbols = tuple(name for name in _REQUIRED_NATIVE_SYMBOLS if not hasattr(library, name))
     error = f"missing mandatory symbols: {', '.join(missing_symbols)}" if missing_symbols else None
+    has_trace = all(hasattr(library, name) for name in _TRACE_SYMBOLS)
     return LibraryProbe(
         candidate.library,
         candidate.source,
         candidate.data,
         True,
         hasattr(library, _EXACT_CLAUSE_SYMBOL),
+        has_trace,
         error,
         missing_symbols,
     )

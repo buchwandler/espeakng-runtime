@@ -178,3 +178,112 @@ def test_auto_mode_parity_with_regional_selector() -> None:
                 continue
             msg = f"{selector} auto: auto={auto_value!r} cli={cli_value!r}"
             assert auto_value == cli_value, msg
+
+
+# --- English weak-word parity ---
+
+ENGLISH_WEAK_WORD_PARITY_CASES = (
+    "the",
+    "and",
+    "to",
+    "for",
+    "of",
+    "we",
+    "you",
+    "they",
+    "I'm",
+    "we're",
+    "you're",
+    "they're",
+    "we've",
+    "you've",
+    "we'll",
+    "you'll",
+    "he's",
+    "she's",
+    "it's",
+)
+
+
+@pytest.mark.espeak
+@pytest.mark.parametrize("text", ENGLISH_WEAK_WORD_PARITY_CASES)
+def test_english_weak_word_parity_zwj(text: str) -> None:
+    """Weak words and contractions produce identical output on native and CLI with U+200D tie."""
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    kwargs = {"voice": "en-us", "use_tie": True, "tie_char": "\u200d"}
+    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
+        native_value = native_runtime.phonemize(text, **kwargs)
+        cli_value = cli_runtime.phonemize(text, **kwargs)
+        from tests._phoneme_parity import assert_phoneme_parity
+
+        assert_phoneme_parity(
+            text=text,
+            native=native_value,
+            cli=cli_value,
+            voice="en-us",
+        )
+
+
+@pytest.mark.espeak
+def test_phrase_context_parity() -> None:
+    """Phrase context produces identical output on native and CLI."""
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    kwargs = {"voice": "en-us", "use_tie": True, "tie_char": "\u200d"}
+    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
+        for phrase in ("we're feel play", "I'm going to the store", "you're welcome"):
+            native_value = native_runtime.phonemize(phrase, **kwargs)
+            cli_value = cli_runtime.phonemize(phrase, **kwargs)
+            from tests._phoneme_parity import assert_phoneme_parity
+
+            assert_phoneme_parity(
+                text=phrase,
+                native=native_value,
+                cli=cli_value,
+                voice="en-us",
+            )
+
+
+@pytest.mark.espeak
+def test_batch_parity_weak_words() -> None:
+    """Batch phonemize_many with weak words produces identical output."""
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    values = ["we're", "the", "hello", "", "we've"]
+    kwargs = {"voice": "en-us", "use_tie": True, "tie_char": "\u200d"}
+    with EspeakRuntime(mode="native") as native_runtime, EspeakRuntime(mode="cli") as cli_runtime:
+        native_batch = native_runtime.phonemize_many(values, **kwargs)
+        cli_batch = cli_runtime.phonemize_many(values, **kwargs)
+        assert len(native_batch) == len(cli_batch) == len(values)
+        assert native_batch[3] == cli_batch[3] == ""
+        for i, (native_val, cli_val) in enumerate(zip(native_batch, cli_batch)):
+            if values[i] and values[i].strip():
+                from tests._phoneme_parity import assert_phoneme_parity
+
+                assert_phoneme_parity(
+                    text=values[i],
+                    native=native_val,
+                    cli=cli_val,
+                    voice="en-us",
+                )
+
+
+@pytest.mark.espeak
+def test_auto_mode_weak_word_parity() -> None:
+    """mode='auto' matches CLI for weak words when native trace is available."""
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    kwargs = {"voice": "en-us", "use_tie": True, "tie_char": "\u200d"}
+    with EspeakRuntime(mode="auto") as auto_runtime, EspeakRuntime(mode="cli") as cli_runtime:
+        for text in ("we're", "I'm", "the", "we've"):
+            auto_value = auto_runtime.phonemize(text, **kwargs)
+            cli_value = cli_runtime.phonemize(text, **kwargs)
+            from tests._phoneme_parity import assert_phoneme_parity
+
+            assert_phoneme_parity(
+                text=text,
+                native=auto_value,
+                cli=cli_value,
+                voice="en-us",
+            )
