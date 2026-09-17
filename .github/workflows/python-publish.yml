@@ -33,7 +33,7 @@ jobs:
           python scripts/check_release_artifacts.py \
             --wheel "$(find dist -maxdepth 1 -name '*.whl' -print -quit)" \
             --sdist "$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)" \
-            --release
+            --release-version "${{ github.event.release.tag_name }}"
           python -m twine check dist/*
 
       - name: Publish package to PyPI
