@@ -19,16 +19,13 @@ def normalize_phoneme_output(value: str) -> str:
 
 
 def _validate_batch_texts(texts: Sequence[str]) -> list[str]:
-    """Validate batch inputs and return a concrete list.
+    """Return batch inputs as a concrete list.
 
-    Every non-empty element must not contain embedded line breaks.
-    This contract is backend-independent so that ``mode='auto'`` yields
-    the same input validity regardless of which backend is selected.
+    Embedded line breaks are valid text. Backends must preserve the
+    ``phonemize_many`` per-item contract even when an optimized batch
+    transport cannot frame multiline items directly.
     """
-    values = list(texts)
-    if any("\n" in text or "\r" in text for text in values if text and text.strip()):
-        raise ValueError("phonemize_many inputs must not contain line breaks")
-    return values
+    return list(texts)
 
 
 def split_best_effort_clauses(text: str) -> list[tuple[str, str | None, bool]]:

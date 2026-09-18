@@ -139,6 +139,20 @@ class CliBackend:
         nonempty = [text for text in values if text and text.strip()]
         if not nonempty:
             return [""] * len(values)
+
+        if any("\n" in text or "\r" in text for text in nonempty):
+            return [
+                self.phonemize(
+                    text,
+                    voice=voice,
+                    separator=separator,
+                    use_tie=use_tie,
+                    tie_char=tie_char,
+                )
+                if text and text.strip()
+                else ""
+                for text in values
+            ]
         process = self._run(
             self._phoneme_args(
                 voice=voice,

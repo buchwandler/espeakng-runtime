@@ -37,6 +37,8 @@ with EspeakRuntime(mode="auto") as runtime:
     )
 ```
 
+`phonemize_many()` preserves one output element per input element. Inputs may contain line breaks (`\n`, `\r`, or `\r\n`). The CLI backend uses its fast newline-delimited batch path for single-line inputs and transparently falls back to per-item invocations when multiline input would make CLI framing ambiguous.
+
 `list_voices()` returns available `Voice` records. `runtime.info` returns a `RuntimeInfo` record describing discovery, implementation, version, parity, and capabilities.
 
 Use `inspect_espeak(require_exact_clauses=True)` when a consumer needs to choose behavior before creating a runtime. Inspection probes libraries without calling `espeak_Initialize`; `LibraryProbe.missing_symbols` and `RuntimeInfo.fallback_code` are intended for diagnostics without parsing human-readable messages.
