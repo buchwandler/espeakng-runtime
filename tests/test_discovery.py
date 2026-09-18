@@ -76,3 +76,60 @@ def test_unloadable_loader_falls_back_to_near_executable(
     assert candidate.source == "near-executable"
     assert [probe.loadable for probe in probes] == [False, True]
     assert probes[0].source == "espeakng-loader"
+
+
+def test_exact_selection_skips_loadable_non_exact_loader_for_later_exact_system(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loader = "/loader/libespeak-ng.so"
+    system = Path("/termux/lib/libespeak-ng.so")
+
+    monkeypatch.setattr(
+        discovery,
+        "_loader_paths",
+        lambda: (loader, "/loader/data"),
+    )
+    monkeypatch.setattr(
+        discovery,
+        "_near_executable_candidates",
+        lambda executable: (system,),
+    )
+    monkeypatch.setattr(
+        discovery.ctypes.util,
+        "find_library",
+        lambda name: None,
+    )
+
+    class BaseLibrary:
+        espeak_Initialize = object()
+        espeak_SetVoiceByName = object()
+        espeak_Terminate = object()
+        espeak_TextToPhonemes = object()
+
+    class LoaderLibrary(BaseLibrary):
+        pass
+
+    class ExactSystemLibrary(BaseLibrary):
+        espeak_TextToPhonemesWithTerminator = object()
+
+    def fake_cdll(path: str):
+        if path == loader:
+            return LoaderLibrary()
+        if path == system.as_posix():
+            return ExactSystemLibrary()
+        raise AssertionError(path)
+
+    monkeypatch.setattr(discovery.ctypes, "CDLL", fake_cdll)
+
+    candidate, probes = discovery.select_native(
+        executable="/termux/bin/espeak-ng",
+        require_exact_clauses=True,
+    )
+
+    assert candidate is not None
+    assert candidate.library == system.as_posix()
+    assert candidate.source == "near-executable"
+    assert len(probes) == 2
+    assert probes[0].loadable
+    assert not probes[0].exact_clause_api
+    assert probes[1].exact_clause_api
