@@ -58,6 +58,7 @@ class FakeNativeLibrary:
         self.synchronize_calls = 0
         self.last_trace_mode: int | None = None
         self.last_trace_stream: object | None = None
+        self.trace_modes: list[int] = []
         self.set_phoneme_trace_calls = 0
 
         self.espeak_Initialize = FakeFunction(self._initialize)
@@ -138,6 +139,7 @@ class FakeNativeLibrary:
 
     def _set_phoneme_trace(self, mode: int, stream: object) -> None:
         self.last_trace_mode = mode
+        self.trace_modes.append(mode)
         self.last_trace_stream = stream
         self.set_phoneme_trace_calls += 1
 
@@ -515,7 +517,9 @@ def test_tie_mode_forwarded_to_trace(monkeypatch: pytest.MonkeyPatch) -> None:
     # Check that SetPhonemeTrace was called with the correct mode
     # PHONEMES_IPA | PHONEMES_TIE | (ord('\u200d') << 8)
     expected_mode = 0x02 | 0x80 | (ord("\u200d") << 8)
-    assert library.last_trace_mode == expected_mode
+    assert library.trace_modes[0] == expected_mode
+    assert library.trace_modes[-1] == 0
+    assert library.last_trace_stream is not None
     backend.close()
 
 
@@ -526,7 +530,9 @@ def test_separator_mode_forwarded_to_trace(monkeypatch: pytest.MonkeyPatch) -> N
     backend.phonemize("hello", voice="en-us", separator="_")
     # PHONEMES_IPA | (ord('_') << 8)
     expected_mode = 0x02 | (ord("_") << 8)
-    assert library.last_trace_mode == expected_mode
+    assert library.trace_modes[0] == expected_mode
+    assert library.trace_modes[-1] == 0
+    assert library.last_trace_stream is not None
     backend.close()
 
 

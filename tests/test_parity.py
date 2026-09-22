@@ -31,6 +31,16 @@ def test_native_and_cli_share_basic_phonemization() -> None:
 
 
 @pytest.mark.espeak
+def test_native_trace_does_not_write_phonemes_to_stdout(capfd) -> None:
+    if not _backends_available():
+        pytest.skip("both eSpeak CLI and native library are required")
+    with EspeakRuntime(mode="native") as runtime:
+        result = runtime.phonemize("words", voice="en-us", use_tie=True, tie_char="\u200d")
+    captured = capfd.readouterr()
+    assert result
+    assert captured.out == ""
+
+@pytest.mark.espeak
 def test_language_style_voice_resolution_parity() -> None:
     if not _backends_available():
         pytest.skip("both eSpeak CLI and native library are required")

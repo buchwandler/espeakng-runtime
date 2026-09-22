@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import ctypes
+import os
 import threading
 from collections.abc import Sequence
+from contextlib import contextmanager
 from pathlib import Path
 
 from .._text import normalize_phoneme_output, split_best_effort_clauses
@@ -17,6 +19,8 @@ from ..errors import (
     VoiceNotFoundError,
 )
 from ..types import Clause, RuntimeInfo, Voice
+
+_SYSTEM_CDLL = ctypes.CDLL
 
 AUDIO_OUTPUT_SYNCHRONOUS = 2
 CHARS_UTF8 = 1
@@ -34,6 +38,25 @@ PHONEME_EVENTS_FLAG = 0x100
 
 # Callback type: int (*callback)(const char *phoneme)
 _PHONEME_CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p)
+
+
+@contextmanager
+def _discard_trace_output():
+    """Provide a C ``FILE*`` sink so native trace never defaults to stdout."""
+    stdio = _SYSTEM_CDLL("msvcrt" if os.name == "nt" else None)
+    stdio.fopen.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
+    stdio.fopen.restype = ctypes.c_void_p
+    stdio.fclose.argtypes = [ctypes.c_void_p]
+    stdio.fclose.restype = ctypes.c_int
+    stream = stdio.fopen(os.fsencode(os.devnull), b"w")
+    if not stream:
+        raise OSError("could not open native eSpeak trace sink")
+    try:
+        yield stream
+    finally:
+        stdio.fclose(stream)
+
+
 CLAUSE_TYPE_SENTENCE = 0x00080000
 CLAUSE_PUNCTUATION_MASK = 0x000FFFFF
 
@@ -348,7 +371,7 @@ class NativeBackend:
         use_tie: bool,
         tie_char: str,
     ) -> str:
-        """Phonemize using synthesis trace (CLI-equivalent path)."""
+        """Phonemize using synthesis trace without inheriting process stdout."""
         mode = self._phoneme_mode(separator, use_tie, tie_char)
         chunks: list[str] = []
 
@@ -358,36 +381,33 @@ class NativeBackend:
                 chunks.append(value.decode("utf-8", errors="replace"))
             return 0
 
-        # Store callback to prevent GC while eSpeak may call it
+        # Store callback to prevent GC while eSpeak may call it.
         self._phoneme_callback_obj = on_phoneme
         previous_callback = self._library.espeak_SetPhonemeCallback(on_phoneme)
-
-        # Set phoneme trace mode with IPA output
-        # espeak_SetPhonemeTrace(mode, stream) - stream=None for callback mode
-        self._library.espeak_SetPhonemeTrace(mode, None)
-
-        # Synthesize synchronously
-        encoded = text.encode("utf-8")
-        synth_id = ctypes.c_uint(0)
-        result = self._library.espeak_Synth(
-            encoded,
-            len(encoded),  # size
-            0,  # position
-            0,  # position_type
-            0,  # end_position
-            0x20,  # espeakCHARS_UTF8
-            ctypes.byref(synth_id),
-            None,  # user_data
-        )
-        if result != 0:  # EE_OK = 0
-            raise PhonemizationError(f"espeak_Synth failed with code {result}")
-
-        # Wait for synthesis to complete
-        self._library.espeak_Synchronize()
-
-        # Restore previous callback
-        self._library.espeak_SetPhonemeCallback(previous_callback)
-        self._phoneme_callback_obj = None
+        try:
+            with _discard_trace_output() as trace_stream:
+                self._library.espeak_SetPhonemeTrace(mode, trace_stream)
+                try:
+                    encoded = text.encode("utf-8")
+                    synth_id = ctypes.c_uint(0)
+                    result = self._library.espeak_Synth(
+                        encoded,
+                        len(encoded),  # size
+                        0,  # position
+                        0,  # position_type
+                        0,  # end_position
+                        0x20,  # espeakCHARS_UTF8
+                        ctypes.byref(synth_id),
+                        None,  # user_data
+                    )
+                    if result != 0:  # EE_OK = 0
+                        raise PhonemizationError(f"espeak_Synth failed with code {result}")
+                    self._library.espeak_Synchronize()
+                finally:
+                    self._library.espeak_SetPhonemeTrace(0, trace_stream)
+        finally:
+            self._library.espeak_SetPhonemeCallback(previous_callback)
+            self._phoneme_callback_obj = None
 
         joined = " ".join(chunks)
         return normalize_phoneme_output(joined)
