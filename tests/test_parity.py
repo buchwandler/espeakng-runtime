@@ -40,6 +40,7 @@ def test_native_trace_does_not_write_phonemes_to_stdout(capfd) -> None:
     assert result
     assert captured.out == ""
 
+
 @pytest.mark.espeak
 def test_language_style_voice_resolution_parity() -> None:
     if not _backends_available():
